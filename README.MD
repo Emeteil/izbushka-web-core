@@ -1,1 +1,1 @@
-# robotics-web-interface
+# izbushka-web-core
