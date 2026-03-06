@@ -1,0 +1,4 @@
+[submodule "com_link_rt"]
+	path = com_link_rt
+	url = https://github.com/Emeteil/com_link_rt_client.git
+	branch = robot
