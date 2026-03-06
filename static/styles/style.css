@@ -1,0 +1,401 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: #2c3e50;
+    font-family: 'Arial', sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    overflow: hidden;
+}
+
+.robot-face {
+    background: #2c3e50;
+    width: 100vmin;
+    height: 100vmin;
+    max-width: 95vh;
+    max-height: 95vw;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+.face-container {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    transition: all 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    transform-origin: center;
+}
+
+.happy .face-container {
+    transform: scale(1.05);
+}
+
+.sad .face-container {
+    transform: scale(0.95);
+}
+
+.angry .face-container {
+    transform: scale(1.02);
+}
+
+.surprised .face-container {
+    transform: scale(1.1);
+}
+
+.wink .face-container {
+    transform: scale(1.03);
+}
+
+.neutral .face-container {
+    transform: scale(1);
+}
+
+.eyes {
+    display: flex;
+    justify-content: space-between;
+    position: absolute;
+    top: 30%;
+    left: 10%;
+    right: 10%;
+    height: 25%;
+}
+
+.eye {
+    width: 30%;
+    height: 100%;
+    background: white;
+    border-radius: 50%;
+    position: relative;
+    overflow: hidden;
+    border: 4px solid #34495e;
+    box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+.pupil {
+    width: 40%;
+    height: 40%;
+    background: #2c3e50;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: all 0.3s ease;
+}
+
+.mouth {
+    position: absolute;
+    width: 40%;
+    height: 15%;
+    background: white;
+    border-radius: 0 0 60px 60px;
+    left: 30%;
+    top: 65%;
+    border: 4px solid #34495e;
+    border-top: none;
+    transition: all 0.3s ease;
+}
+
+.eyebrows {
+    display: flex;
+    justify-content: space-between;
+    position: absolute;
+    top: 15%;
+    left: 10%;
+    right: 10%;
+    height: 10%;
+}
+
+.eyebrow {
+    width: 30%;
+    height: 60%;
+    background: #34495e;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    max-width: 500px;
+    z-index: 10;
+    position: fixed;
+    bottom: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 15px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+button {
+    background: #3498db;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 25px;
+    cursor: pointer;
+    font-size: 16px;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+}
+
+button:hover {
+    background: #2980b9;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+.happy .mouth {
+    height: 18%;
+    border-radius: 0 0 60px 60px;
+    background: #e74c3c;
+}
+
+.happy .eyebrow {
+    transform: rotate(-5deg);
+}
+
+.sad .mouth {
+    height: 12%;
+    border-radius: 60px 60px 0 0;
+    transform: translateY(10px);
+}
+
+.sad .eyebrow {
+    transform: rotate(10deg);
+}
+
+.sad .left-eyebrow {
+    transform: rotate(15deg);
+}
+
+.sad .right-eyebrow {
+    transform: rotate(5deg);
+}
+
+.angry .eyebrow {
+    transform: rotate(-15deg);
+    background: #e74c3c;
+}
+
+.angry .left-eyebrow {
+    transform: rotate(-20deg);
+}
+
+.angry .right-eyebrow {
+    transform: rotate(-10deg);
+}
+
+.angry .mouth {
+    height: 10%;
+    background: #e74c3c;
+    border-radius: 10px;
+}
+
+.surprised .mouth {
+    width: 20%;
+    height: 20%;
+    border-radius: 50%;
+    background: #e74c3c;
+    left: 40%;
+    top: 60%;
+}
+
+.surprised .eyebrow {
+    transform: translateY(-10px);
+}
+
+.neutral .mouth {
+    height: 8%;
+    border-radius: 4px;
+    background: #34495e;
+}
+
+.wink .right-eye {
+    height: 20%;
+    border-radius: 6px;
+    transition: all 0.3s ease;
+}
+
+.wink .right-eye .pupil {
+    display: none;
+}
+
+.wink .mouth {
+    height: 16%;
+    border-radius: 0 0 40px 40px;
+    background: #3498db;
+}
+
+@media (max-width: 768px) {
+    .robot-face {
+        width: 98vmin;
+        height: 98vmin;
+    }
+
+    .controls {
+        max-width: 90%;
+        padding: 10px;
+    }
+
+    button {
+        padding: 10px 16px;
+        font-size: 14px;
+    }
+}
+
+@media (max-width: 480px) {
+    .controls {
+        gap: 8px;
+    }
+
+    button {
+        padding: 8px 12px;
+        font-size: 12px;
+    }
+
+    .eyebrows {
+        top: 12%;
+    }
+
+    .eyes {
+        top: 28%;
+    }
+
+    .mouth {
+        top: 63%;
+    }
+}
+
+.confused .face-container {
+    transform: scale(1.02) rotate(-5deg);
+}
+
+.confused .eyebrow {
+    transform: rotate(5deg);
+    background: #95a5a6;
+}
+
+.confused .left-eyebrow {
+    transform: rotate(-15deg) translateX(-5px);
+}
+
+.confused .right-eyebrow {
+    transform: rotate(20deg) translateX(5px);
+}
+
+.confused .mouth {
+    width: 30%;
+    height: 8%;
+    border-radius: 4px;
+    background: #34495e;
+    transform: rotate(-5deg);
+    left: 35%;
+}
+
+.confused .left-eye {
+    transform: scale(0.9);
+}
+
+.confused .right-eye {
+    transform: scale(1.1);
+}
+
+.confused .pupil {
+    transform: translate(-70%, -50%) !important;
+}
+
+@keyframes redBackgroundPulse {
+    0%, 100% {
+        background: #c0392b;
+    }
+    50% {
+        background: #e74c3c;
+    }
+}
+
+@keyframes constantShake {
+    0% { transform: scale(1.05) translate(0, 0); }
+    10% { transform: scale(1.05) translate(-3px, 2px); }
+    20% { transform: scale(1.05) translate(3px, -2px); }
+    30% { transform: scale(1.05) translate(-2px, -3px); }
+    40% { transform: scale(1.05) translate(2px, 3px); }
+    50% { transform: scale(1.05) translate(-3px, 1px); }
+    60% { transform: scale(1.05) translate(3px, -1px); }
+    70% { transform: scale(1.05) translate(-1px, -2px); }
+    80% { transform: scale(1.05) translate(1px, 2px); }
+    90% { transform: scale(1.05) translate(-2px, 1px); }
+    100% { transform: scale(1.05) translate(0, 0); }
+}
+
+body.aggressive-mode {
+    background: #c0392b !important;
+    animation: redBackgroundPulse 1.5s ease-in-out infinite;
+}
+
+body.aggressive-mode .robot-face {
+    background: transparent !important;
+}
+
+.aggressive .face-container {
+    transform: scale(1.25);
+    animation: constantShake 0.15s infinite;
+}
+
+.aggressive .eyebrow {
+    background: #8b0000;
+    height: 90%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.aggressive .left-eyebrow {
+    transform: rotate(25deg) translateY(-5px) translateX(5px);
+    transform-origin: left bottom;
+}
+
+.aggressive .right-eyebrow {
+    transform: rotate(-25deg) translateY(-5px) translateX(-5px);
+    transform-origin: right bottom;
+}
+
+.aggressive .eye {
+    height: 85%;
+    border-color: #8b0000;
+    box-shadow: inset 0 0 30px rgba(139, 0, 0, 0.5);
+}
+
+.aggressive .pupil {
+    background: #8b0000;
+    width: 55%;
+    height: 55%;
+    box-shadow: 0 0 10px rgba(139, 0, 0, 0.8);
+}
+
+.aggressive .mouth {
+    width: 38%;
+    height: 20%;
+    background: #1a1a1a;
+    border-radius: 50% 50% 0 0;
+    border: 5px solid #8b0000;
+    border-bottom: none;
+    top: 68%;
+    left: 31%;
+    box-shadow: inset 0 5px 15px rgba(0, 0, 0, 0.8);
+}

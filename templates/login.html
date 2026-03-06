@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+</head>
+<body>
+    <h1>Авторизация</h1>
+    
+    <div id="auth-forms">
+        <div id="login-form">
+            <h2>Вход</h2>
+            <form id="loginForm">
+                <div>
+                    <label for="login-nickname">Никнейм:</label>
+                    <input type="text" id="login-nickname" name="nickname" required>
+                </div>
+                <div>
+                    <label for="login-password">Пароль:</label>
+                    <input type="password" id="login-password" name="password" required>
+                </div>
+                <button type="submit">Войти</button>
+            </form>
+            <div id="login-message" style="color: red; margin-top: 10px;"></div>
+        </div>
+        
+        <hr>
+        
+        <!-- <div id="register-form">
+            <h2>Регистрация</h2>
+            <form id="registerForm">
+                <div>
+                    <label for="reg-nickname">Никнейм:</label>
+                    <input type="text" id="reg-nickname" name="nickname" required>
+                </div>
+                <div>
+                    <label for="reg-password">Пароль:</label>
+                    <input type="password" id="reg-password" name="password" required>
+                </div>
+                <button type="submit">Зарегистрироваться</button>
+            </form>
+            <div id="register-message" style="color: red; margin-top: 10px;"></div>
+        </div> -->
+    </div>
+    
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const nickname = document.getElementById('login-nickname').value;
+            const password = document.getElementById('login-password').value;
+            
+            fetch('/api/authorization/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ nickname, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messageDiv = document.getElementById('login-message');
+                if (data.status === 'success') {
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Перенаправление...';
+                    window.location.href = data.data.preferred_redirect || '/';
+                } else {
+                    messageDiv.style.color = 'red';
+                    messageDiv.textContent = 'Ошибка: ' + data.error.message;
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('login-message').textContent = 'Произошла ошибка при входе';
+            });
+        });
+        
+        document.getElementById('registerForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const nickname = document.getElementById('reg-nickname').value;
+            const password = document.getElementById('reg-password').value;
+            
+            fetch('/api/authorization/register', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ nickname, password })
+            })
+            .then(response => response.json())
+            .then(data => {
+                const messageDiv = document.getElementById('register-message');
+                if (data.status === 'success') {
+                    messageDiv.style.color = 'green';
+                    messageDiv.textContent = 'Регистрация успешна! Перенаправление...';
+                    window.location.href = data.data.preferred_redirect || '/';
+                } else {
+                    messageDiv.style.color = 'red';
+                    if (Array.isArray(data.error.details)) {
+                        messageDiv.textContent = 'Ошибки: ' + data.error.details.join(', ');
+                    } else {
+                        messageDiv.textContent = 'Ошибка: ' + data.error.message;
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                document.getElementById('register-message').textContent = 'Произошла ошибка при регистрации';
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Admin Panel</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="{{ url_for('static', filename='scripts/admin.js') }}" defer></script>
+</head>
+
+<body>
+    <h1>Admin Panel</h1>
+
+    <h2>Webcam Settings</h2>
+    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div>
+                <h3>Video Quality</h3>
+                <div style="margin-bottom: 10px;">
+                    <label>Quality (1-100):</label>
+                    <input type="range" id="quality-slider" min="5" max="95" value="85">
+                    <span id="quality-value">85</span>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label>Resolution:</label>
+                    <select id="resolution-select">
+                        <option value="70x70">70x70 (Ultra Low)</option>
+                        <option value="320x240">320x240 (Low)</option>
+                        <option value="640x480" selected>640x480 (Medium)</option>
+                        <option value="800x600">800x600 (High)</option>
+                        <option value="1024x768">1024x768 (HD)</option>
+                        <option value="custom">Custom</option>
+                    </select>
+                </div>
+
+                <div id="custom-resolution" style="display: none; margin-bottom: 10px;">
+                    <div>
+                        <label>Width:</label>
+                        <input type="number" id="custom-width" min="160" max="1920" value="640" style="width: 80px;">
+                    </div>
+                    <div>
+                        <label>Height:</label>
+                        <input type="number" id="custom-height" min="120" max="1080" value="480" style="width: 80px;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 10px; display: none;">
+                    <label>FPS:</label>
+                    <select id="fps-select">
+                        <option value="10">10 FPS</option>
+                        <option value="15">15 FPS</option>
+                        <option value="20">20 FPS</option>
+                        <option value="30" selected>30 FPS</option>
+                        <option value="60">60 FPS</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label>
+                        <input type="checkbox" id="auto-adjust" checked>
+                        Auto Adjust Quality
+                    </label>
+                </div>
+
+                <div style="margin-bottom: 10px;">
+                    <label>
+                        <input type="checkbox" id="network-adaptation" checked>
+                        Network Adaptation
+                    </label>
+                </div>
+
+                <button onclick="updateVideoSettings()" style="margin-top: 10px; padding: 5px 15px;">
+                    Apply Settings
+                </button>
+                <button onclick="loadCurrentSettings()" style="margin-top: 10px; margin-left: 10px; padding: 5px 15px;">
+                    Refresh
+                </button>
+            </div>
+
+            <div>
+                <h3>Statistics</h3>
+                <div id="stats-display" style="font-family: monospace; font-size: 14px;">
+                    <div>Loading statistics...</div>
+                </div>
+
+                <div style="margin-top: 15px;">
+                    <button onclick="getWebcamStatus()">Refresh Status</button>
+                    <button onclick="resetStats()" style="margin-left: 10px;">Reset Stats</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Webcam Stream</h2>
+    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+            <div style="display: flex; gap: 10px; align-items: center;">
+                <button onclick="startWebcamStream()" id="start-webcam-btn">Start Webcam</button>
+                <button onclick="stopWebcamStream()" id="stop-webcam-btn" disabled>Stop Webcam</button>
+                <span id="webcam-status">Status: Stopped</span>
+            </div>
+            <div style="position: relative;">
+                <img id="webcam-stream" src=""
+                    style="max-width: 640px; max-height: 480px; border: 1px solid #ddd; display: none;">
+                <div id="webcam-loading"
+                    style="width: 640px; height: 480px; display: none; background: #f5f5f5; justify-content: center; align-items: center; border: 1px solid #ddd;">
+                    Loading webcam stream...
+                </div>
+                <div id="webcam-error"
+                    style="width: 640px; height: 480px; display: none; background: #fff5f5; justify-content: center; align-items: center; border: 1px solid #ddd; color: red;">
+                    Webcam stream unavailable
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <h2>Emotions</h2>
+    <div id="emotions-list"></div>
+
+    <h2>ComLink RT</h2>
+    <div id="connection-status" style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        Connection Status: <span id="status-text">Checking...</span>
+    </div>
+
+    <h3>Sensor Data</h3>
+    <div id="sensor-data">
+        <div id="distance-display">Distance: -- cm</div>
+        <div id="gyro-display">Gyro: --</div>
+        <div id="millis-display">Millis: --</div>
+    </div>
+
+    <h3>Sensor Charts</h3>
+    <div style="display: flex; flex-wrap: wrap;">
+        <div style="width: 400px; margin: 10px;">
+            <canvas id="distanceChart"></canvas>
+        </div>
+        <div style="width: 400px; margin: 10px;">
+            <canvas id="gyroChart"></canvas>
+        </div>
+    </div>
+
+    <h3>Commands</h3>
+
+    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        <h4>Motors</h4>
+        <button onclick="sendMotorCommand('move_forward')">Forward</button>
+        <button onclick="sendMotorCommand('move_backward')">Backward</button>
+        <button onclick="sendMotorCommand('turn_left')">Turn Left</button>
+        <button onclick="sendMotorCommand('turn_right')">Turn Right</button>
+        <button onclick="sendMotorCommand('stop')">Stop</button>
+        <button onclick="sendMotorCommand('brake')">Brake</button>
+        <br><br>
+        Speed: <input type="range" id="motor-speed" min="0" max="255" value="150">
+        <span id="speed-value">150</span>
+    </div>
+
+    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        <h4>Servo</h4>
+        Channel: <input type="number" id="servo-channel" value="0" min="0" max="15">
+        Angle: <input type="range" id="servo-angle" min="0" max="180" value="90">
+        <span id="angle-value">90</span>
+        <br><br>
+        <button onclick="sendServoCommand('move_immediate')">Move Immediate</button>
+        <button onclick="sendServoCommand('move_smooth')">Move Smooth</button>
+    </div>
+
+    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
+        <h4>Test Commands</h4>
+        <button onclick="sendPing()">Ping Robot</button>
+        <div id="ping-result"></div>
+    </div>
+
+    <div id="message" style="margin-top: 20px; color: green;"></div>
+</body>
+
+</html>

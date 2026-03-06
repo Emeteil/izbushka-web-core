@@ -1,0 +1,57 @@
+host: "0.0.0.0"
+port: 80
+
+com_link_rt_port: "COM4"
+
+open_browser_on_start: false
+
+users_json_path: "database/users.json"
+
+environment_variables:
+  - "flask_secret"
+  - "MASTER_TOKEN"
+
+user_data_settings:
+  length:
+    nickname: [3, 32]
+    password: [8, 128]
+  requirements:
+    password:
+      uppercase: true
+      lowercase: true
+      digit: true
+      special_char: true
+  regex:
+    email: "[^@]+@[^@]+\\.[^@]+"
+    special_chars: "[!@#$%^&*(),.?:{}|<>]"
+
+emotions:
+  ids: ['happy', 'sad', 'angry', 'surprised', 'neutral', 'wink', 'aggressive', 'confused']
+  items:
+    - id: happy
+      name: "HAPPY"
+      emoji: "😊"
+    - id: sad
+      name: "SAD"
+      emoji: "😢"
+    - id: angry
+      name: "ANGRY"
+      emoji: "😠"
+    - id: surprised
+      name: "SURPRISED"
+      emoji: "😯"
+    - id: neutral
+      name: "NEUTRAL"
+      emoji: "😐"
+    - id: wink
+      name: "WINK"
+      emoji: "😉"
+    - id: aggressive
+      name: "AGGRESSIVE"
+      emoji: "😡"
+    - id: confused
+      name: "CONFUSED"
+      emoji: "😕"
+
+load_dotenv: true
+debug: false

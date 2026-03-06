@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>MECH COMMANDER // ROBOTICS</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles/control.css') }}">
+    <script src="{{ url_for('static', filename='scripts/control.js') }}" defer></script>
+</head>
+
+<body>
+
+    <div id="loading-screen">
+        <h1 class="loading-title">INITIALIZING SYSTEM...</h1>
+        <div class="loader">
+            <div class="loader-bar"></div>
+        </div>
+    </div>
+
+    <img id="video-background" src="" alt="NO SIGNAL">
+    <div class="video-overlay"></div>
+    <div class="scanline"></div>
+    <div class="crosshair"></div>
+
+    <div class="hud-container">
+
+        <div class="top-bar">
+            <div class="status-panel">
+                <div class="panel-title">SYSTEM STATUS</div>
+                <div class="data-row">
+                    <span>UPLINK</span>
+                    <span><span id="connection-indicator" class="connection-indicator disconnected"></span><span
+                            id="sys-status">CONNECTING</span></span>
+                </div>
+                <div class="data-row">
+                    <span>EMOTION</span>
+                    <span id="current-emotion" class="value-text">NORMAL</span>
+                </div>
+                <div style="margin-top: 5px;">
+                    <select id="emotion-select"
+                        style="width: 100%; background: rgba(0,0,0,0.5); border: 1px solid var(--hud-primary); color: var(--hud-primary); font-family: 'Orbitron'; padding: 2px;">
+                        <option>LOADING...</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sensor-panel text-right">
+                <div class="panel-title">SENSOR ARRAY</div>
+                <div class="data-row">
+                    <span>DISTANCE</span>
+                    <span id="sensor-dist" class="value-text">-- CM</span>
+                </div>
+                <div class="data-row">
+                    <span>TEMP</span>
+                    <span id="sensor-temp" class="value-text">--°C</span>
+                </div>
+                <div class="data-row">
+                    <span>GYRO</span>
+                    <span id="sensor-gyro" class="value-text">--</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="log-panel" style="display: none;">
+            <div class="panel-title log-title">LOGS</div>
+            <div id="log-output" class="log-content">
+            </div>
+        </div>
+
+        <div class="controls-area">
+            <div id="joystick-container" class="joystick-zone">
+                <div class="joystick-label">
+                    <br> SPEED: <span id="speed-val">0</span>
+                </div>
+            </div>
+
+            <div class="actions-zone">
+                <div class="turret-wrapper">
+                    <div class="label-mini">TURRET CTRL</div>
+                    <div class="turret-controls">
+                        <button id="btn-turret-left" class="btn btn-turret">↺</button>
+                        <button id="btn-turret-right" class="btn btn-turret">↻</button>
+                    </div>
+                </div>
+
+                <div class="extra-buttons">
+                    <button class="btn">FIRE</button>
+                    <button class="btn">SCAN</button>
+                    <button class="btn">LOCK</button>
+                    <button class="btn">MODE</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+</body>
+
+</html>
