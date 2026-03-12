@@ -1,23 +1,24 @@
-from flask import jsonify, Response
+from fastapi.responses import JSONResponse
 from settings import * 
 
-def apiResponse(data, code: int = 200, errorMessage: str = "Error") -> Response:
-    if not (400 <= code <= 500):
-        return (
-            jsonify({"status": "success", "data": data}),
-            code,
+def apiResponse(data, code: int = 200, errorMessage: str = "Error") -> JSONResponse:
+    if not (400 <= code <= 599):
+        return JSONResponse(
+            content={"status": "success", "data": data},
+            status_code=code
         )
     else:
-        return jsonify(
-            {
+        return JSONResponse(
+            content={
                 "status": "error",
                 "error": {
                     "code": code,
                     "message": errorMessage,
                     "details": data,
                 },
-            }
-        ), code
+            },
+            status_code=code
+        )
 
 
 class ApiError(Exception):
@@ -26,4 +27,4 @@ class ApiError(Exception):
         self.data = data
         
     def __str__(self):
-        return self.data
+        return str(self.data)

@@ -1,25 +1,28 @@
-from typing import Any, Callable, Dict, Optional, TypeVar, Tuple
+from typing import Any, Dict, Optional, Tuple
 from datetime import datetime, timedelta, timezone
-from functools import wraps
-from flask import request
+from fastapi import Request, HTTPException, Depends, WebSocket, status
+from fastapi.security import APIKeyCookie, APIKeyHeader, APIKeyQuery
 from beartype import beartype
 import jwt
 
-from utils.api_response import ApiError
 from utils.db.users import (
     get_user_by_id
 )
-from settings import *
+from settings import settings
+
+cookie_scheme = APIKeyCookie(name="token", auto_error=False)
+header_scheme = APIKeyHeader(name="Authorization", auto_error=False)
+query_scheme = APIKeyQuery(name="token", auto_error=False)
 
 @beartype
 def _verify_token(token: str) -> Optional[Dict[str, Any]]:
-    if token == app.config["MASTER_TOKEN"]:
+    if token == settings.get("MASTER_TOKEN"):
         return {"user_id": "master", "nickname": "Master User", "master": True}
-    
+
     try:
         payload: Dict[str, Any] = jwt.decode(
             token, 
-            app.config["SECRET_KEY"], 
+            settings.get("SECRET_KEY"), 
             algorithms=["HS256"]
         )
         return payload
@@ -29,7 +32,7 @@ def _verify_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
 @beartype
-def is_logged(field: str = "headers", raise_on: bool = False) -> Tuple[bool, dict]:
+async def is_logged(request: Request, field: str = "headers", raise_on: bool = False) -> Tuple[bool, dict]:
     token: Optional[str] = None
     
     try:
@@ -43,14 +46,16 @@ def is_logged(field: str = "headers", raise_on: bool = False) -> Tuple[bool, dic
             case "cookies":
                 token = request.cookies.get("token")
             case "args":
-                token = request.args.get("token")
+                token = request.query_params.get("token")
             case "json":
-                token = request.get_json().get("token")
+                data = await request.json()
+                token = data.get("token")
             case "data":
-                token = request.get_data().get("token")
+                data = await request.form()
+                token = data.get("token")
     except:
         if raise_on:
-            raise ApiError(400)
+            raise HTTPException(status_code=400, detail="Invalid request format")
         return (False, {})
     
     if token:
@@ -58,14 +63,14 @@ def is_logged(field: str = "headers", raise_on: bool = False) -> Tuple[bool, dic
     
     if not token:
         if raise_on:
-            raise ApiError(401)
+            raise HTTPException(status_code=401, detail="Authentication token missing")
         return (False, {})
     
     payload = _verify_token(token)
     
     if not payload:
         if raise_on:
-            raise ApiError(401)
+            raise HTTPException(status_code=401, detail="Invalid or expired token")
         return (False, {})
     
     if not payload.get("master"):
@@ -73,23 +78,66 @@ def is_logged(field: str = "headers", raise_on: bool = False) -> Tuple[bool, dic
         
         if not user:
             if raise_on:
-                raise ApiError(401)
+                raise HTTPException(status_code=401, detail="User not found")
             return (False, {})
     
     return (True, payload)
 
-F = TypeVar('F', bound=Callable[..., Any])
-@beartype
-def login_required(field: str = "headers") -> Callable[[F], F]:
-    def decorator(f: F) -> F:
-        @wraps(f)
-        def decorated_function(*args: Any, **kwargs: Any) -> Any:
-            _, payload = is_logged(field, True)
-            kwargs['payload'] = payload
-            return f(*args, **kwargs)
+async def check_login_headers(
+    request: Request, 
+    token: str = Depends(header_scheme)
+):
+    logged, payload = await is_logged(request, "headers", True)
+    return payload
+
+async def check_login_cookies(
+    request: Request, 
+    token: str = Depends(cookie_scheme)
+):
+    logged, payload = await is_logged(request, "cookies", True)
+    return payload
+
+async def check_login_args(
+    request: Request, 
+    token: str = Depends(query_scheme)
+):
+    logged, payload = await is_logged(request, "args", True)
+    return payload
+
+def login_required(field: str = "headers"):
+    if field == "headers":
+        return Depends(check_login_headers)
+    elif field == "cookies":
+        return Depends(check_login_cookies)
+    elif field == "args":
+        return Depends(check_login_args)
+    return Depends(check_login_headers)
+
+async def get_current_user_ws(
+    websocket: WebSocket,
+    token: Optional[str] = None
+):
+    if not token:
+        token = websocket.query_params.get("token")
+    if not token:
+        token = websocket.cookies.get("token")
         
-        return decorated_function
-    return decorator
+    if not token:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return None
+        
+    payload = _verify_token(token)
+    if not payload:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+        return None
+        
+    if not payload.get("master"):
+        user = get_user_by_id(payload.get("user_id"))
+        if not user:
+            await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
+            return None
+        
+    return payload
 
 @beartype
 def generate_token(
@@ -102,4 +150,4 @@ def generate_token(
         "nickname": nickname,
         "exp": datetime.now(timezone.utc) + TTL
     }
-    return jwt.encode(payload, app.config["SECRET_KEY"], algorithm="HS256")
+    return jwt.encode(payload, settings.get("SECRET_KEY"), algorithm="HS256")

@@ -1,34 +1,41 @@
+from fastapi import APIRouter, Depends
 from authorization import login_required
-from settings import *
-from utils.api_response import *
-from flask import request
+from utils.api_response import apiResponse, ApiError
+from settings import settings, app
+import settings as g_settings
+from api.schemas.emotions import EmotionResponse, SetEmotionRequest, EmotionListResponse, EmotionSetResponse
+from utils.connection_manager import manager
 
-@app.route("/api/emotions/current", methods=["GET"])
-def get_current_emotion():
-    return apiResponse({
-        "emotion": current_emotion
-    })
+router = APIRouter(prefix="/api/emotions", tags=["Emotions"])
 
-@app.route("/api/emotions/set", methods=["POST"])
-@login_required()
-def set_emotion_http(payload):
-    global current_emotion
-    
-    data = request.get_json()
-    if not data or "emotion" not in data:
-        raise ApiError(400, "Emotion parameter is required")
-    
-    emotion = data["emotion"]
+@router.get("/current", 
+    response_model=EmotionResponse, 
+    summary="Получить текущую эмоцию", 
+    description="Возвращает текущую эмоцию, которая отображается на роботе."
+)
+async def get_current_emotion():
+    return apiResponse({"emotion": g_settings.current_emotion})
+
+@router.post("/set", 
+    response_model=EmotionSetResponse, 
+    summary="Установить новую эмоцию", 
+    description="Изменяет текущую эмоцию робота и оповещает всех подключенных клиентов через WebSocket."
+)
+async def set_emotion_http(req: SetEmotionRequest, payload: dict = login_required()):
+    emotion = req.emotion
     valid_emotions = settings["emotions"]["ids"]
     
     if emotion not in valid_emotions:
         raise ApiError(400, f"Invalid emotion. Must be one of: {', '.join(valid_emotions)}")
     
-    current_emotion = emotion
+    g_settings.current_emotion = emotion
     
-    socketio.emit("emotion_changed", {
-        "emotion": emotion,
-        "source": "http"
+    await manager.broadcast({
+        "event": "emotion_changed",
+        "data": {
+            "emotion": emotion,
+            "source": "http"
+        }
     })
     
     return apiResponse({
@@ -36,10 +43,20 @@ def set_emotion_http(payload):
         "emotion": emotion
     })
 
-@app.route("/api/emotions", methods=["GET"])
-@app.route("/api/emotions/list", methods=["GET"])
-def list_emotions():
+@router.get("",
+    response_model=EmotionListResponse, 
+    summary="Получить список всех эмоций", 
+    description="Возвращает список всех доступных эмоций и текущую активную эмоцию."
+)
+@router.get("/list", 
+    response_model=EmotionListResponse, 
+    summary="Получить список всех эмоций", 
+    description="Возвращает список всех доступных эмоций и текущую активную эмоцию."
+)
+async def list_emotions():
     return apiResponse({
         "emotions": settings["emotions"]["items"],
-        "current_emotion": current_emotion
+        "current_emotion": g_settings.current_emotion
     })
+
+app.include_router(router)

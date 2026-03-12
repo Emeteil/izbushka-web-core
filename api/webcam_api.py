@@ -1,12 +1,16 @@
+from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from authorization import login_required
-from settings import *
-from utils.api_response import *
-from flask import Response, request
+from utils.api_response import apiResponse
 import cv2
 import threading
 import atexit
 import time
 import numpy as np
+from settings import app
+from api.schemas.webcam import WebcamStatusResponse, WebcamQualityResponse, WebcamQualityRequest
+
+router = APIRouter(prefix="/api/webcam", tags=["Webcam"])
 
 current_frame = None
 current_frame_bytes = None
@@ -87,7 +91,7 @@ def capture_frames():
             avg_interval = np.mean(frame_stats["stream_intervals"][-5:])
             current_quality = calculate_adaptive_quality(avg_interval - target_frame_time)
         
-        encode_params_with_quality = encode_params + [cv2.IMWRITE_JPEG_QUALITY, current_quality]
+        encode_params_with_quality = encode_params + [cv2.IMWRITE_JPEG_QUALITY, int(current_quality)]
         
         ret, buffer = cv2.imencode('.jpg', frame, encode_params_with_quality)
         encode_time = time.time() - encode_start
@@ -193,14 +197,19 @@ def restart_webcam_capture():
 start_webcam_capture()
 atexit.register(stop_webcam_capture)
 
-@app.route("/api/webcam/stream")
-@login_required("args")
-def webcam_stream(payload):
-    return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+@router.get("/stream", 
+    summary="Получить видеопоток с камеры", 
+    description="Возвращает стрим кадров с веб-камеры в формате multipart/x-mixed-replace (MJPEG). Требует авторизации (через параметр токена)."
+)
+async def webcam_stream(payload: dict = login_required("args")):
+    return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
 
-@app.route("/api/webcam/status")
-@login_required()
-def webcam_status(payload):
+@router.get("/status", 
+    response_model=WebcamStatusResponse, 
+    summary="Статус веб-камеры", 
+    description="Возвращает текущий статус захвата, доступность кадров и возраст последнего кадра."
+)
+async def webcam_status(payload: dict = login_required()):
     return apiResponse({
         "status": "running" if capture_thread and capture_thread.is_alive() else "stopped",
         "frame_available": current_frame_bytes is not None,
@@ -209,64 +218,71 @@ def webcam_status(payload):
         "actual_fps": 1.0 / np.mean(frame_stats["stream_intervals"][-10:]) if len(frame_stats["stream_intervals"]) >= 10 else None
     })
 
-@app.route("/api/webcam/quality", methods=["GET", "POST"])
-@login_required()
-def webcam_quality(payload):
+@router.get("/quality", 
+    response_model=WebcamQualityResponse, 
+    summary="Получить настройки качества камеры", 
+    description="Возвращает текущие настройки качества видеопотока и статистику производительности (FPS, задержку и т.д.)."
+)
+async def get_webcam_quality(payload: dict = login_required()):
+    stats = {
+        "avg_capture_time": float(np.mean(frame_stats["capture_times"][-10:])) if frame_stats["capture_times"] else 0.0,
+        "avg_encode_time": float(np.mean(frame_stats["encode_times"][-10:])) if frame_stats["encode_times"] else 0.0,
+        "avg_stream_interval": float(np.mean(frame_stats["stream_intervals"][-10:])) if frame_stats["stream_intervals"] else 0.0,
+        "target_fps": frame_stats["target_fps"]
+    }
+    return apiResponse({
+        "quality": video_quality,
+        "statistics": stats
+    })
+
+@router.post("/quality", 
+    response_model=WebcamQualityResponse, 
+    summary="Установить настройки качества камеры", 
+    description="Позволяет изменить настройки видеопотока (качество, разрешение, FPS, автоподстройку). При некоторых изменениях (особенно FPS) возможен перезапуск захвата кадра."
+)
+async def set_webcam_quality(req: WebcamQualityRequest, payload: dict = login_required()):
     global video_quality, frame_stats
 
-    if request.method == "GET":
-        stats = {
-            "avg_capture_time": np.mean(frame_stats["capture_times"][-10:]) if frame_stats["capture_times"] else 0,
-            "avg_encode_time": np.mean(frame_stats["encode_times"][-10:]) if frame_stats["encode_times"] else 0,
-            "avg_stream_interval": np.mean(frame_stats["stream_intervals"][-10:]) if frame_stats["stream_intervals"] else 0,
-            "target_fps": frame_stats["target_fps"]
-        }
+    restart_required = False
 
-        return apiResponse({
-            "quality": video_quality,
-            "statistics": stats
-        })
+    if req.quality is not None:
+        video_quality["quality"] = max(video_quality["min_quality"], min(video_quality["max_quality"], req.quality))
 
-    elif request.method == "POST":
-        data = request.json
-        restart_required = False
+    if req.width is not None:
+        video_quality["width"] = req.width
 
-        if "quality" in data and isinstance(data["quality"], int):
-            video_quality["quality"] = max(video_quality["min_quality"], min(video_quality["max_quality"], data["quality"]))
+    if req.height is not None:
+        video_quality["height"] = req.height
 
-        if "width" in data and isinstance(data["width"], int):
-            video_quality["width"] = data["width"]
+    if req.fps is not None:
+        video_quality["fps"] = max(1, min(60, req.fps))
+        frame_stats["target_fps"] = video_quality["fps"]
+        restart_required = True
 
-        if "height" in data and isinstance(data["height"], int):
-            video_quality["height"] = data["height"]
+    if req.auto_adjust is not None:
+        video_quality["auto_adjust"] = req.auto_adjust
 
-        if "fps" in data and isinstance(data["fps"], int):
-            video_quality["fps"] = max(1, min(60, data["fps"]))
-            frame_stats["target_fps"] = video_quality["fps"]
-            restart_required = True
+    if req.network_adaptation is not None:
+        video_quality["network_adaptation"] = req.network_adaptation
 
-        if "auto_adjust" in data and isinstance(data["auto_adjust"], bool):
-            video_quality["auto_adjust"] = data["auto_adjust"]
+    if any(var is not None for var in [req.quality, req.width, req.height, req.fps]):
+        for key in frame_stats:
+            if isinstance(frame_stats[key], list):
+                frame_stats[key] = []
 
-        if "network_adaptation" in data and isinstance(data["network_adaptation"], bool):
-            video_quality["network_adaptation"] = data["network_adaptation"]
+    if restart_required:
+        restart_webcam_capture()
 
-        if any(key in data for key in ["quality", "width", "height", "fps"]):
-            for key in frame_stats:
-                if isinstance(frame_stats[key], list):
-                    frame_stats[key] = []
+    return apiResponse({
+        "quality": video_quality,
+        "message": "Video quality settings updated" + (" and capture restarted" if restart_required else "")
+    })
 
-        if restart_required:
-            restart_webcam_capture()
-
-        return apiResponse({
-            "quality": video_quality,
-            "message": "Video quality settings updated" + (" and capture restarted" if restart_required else "")
-        })
-
-@app.route("/api/webcam/reset_stats")
-@login_required()
-def reset_stats(payload):
+@router.get("/reset_stats", 
+    summary="Сбросить статистику производительности", 
+    description="Очищает собранную статистику задержек кадров, захвата и кодирования."
+)
+async def reset_stats(payload: dict = login_required()):
     for key in frame_stats:
         if isinstance(frame_stats[key], list):
             frame_stats[key] = []
@@ -276,3 +292,5 @@ def reset_stats(payload):
         "message": "Statistics reset",
         "quality": video_quality
     })
+
+app.include_router(router)

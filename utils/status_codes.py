@@ -1,194 +1,162 @@
 status_codes = {
     400: {
-        "title": "400 Некорректный запрос",
-        "description": "Что-то пошло не так. Может, стоит попробовать включить мозг перед отправкой запроса? Сервер просто не понимает, чего ты от него хочешь."
+        "title": "400 Bad Request",
+        "description": "The server cannot or will not process the request due to an apparent client error."
     },
     401: {
-        "title": "401 Неавторизован",
-        "description": "А где твой пропуск, дружок? Без авторизации ты тут как на корпоративе без приглашения – доступ закрыт!"
+        "title": "401 Unauthorized",
+        "description": "Authentication is required and has failed or has not yet been provided."
     },
     402: {
-        "title": "402 Платёж требуется",
-        "description": "Что, ты думал это бесплатно? Оплати счёт, чтобы продолжить использовать сервис. Даже интернет не такой демократичный."
+        "title": "402 Payment Required",
+        "description": "Reserved for future use."
     },
     403: {
-        "title": "403 Запрещено",
-        "description": "Извини, но у тебя тут нет прав. Это как пытаться пройти в VIP-зону с билетом из пятого ряда."
+        "title": "403 Forbidden",
+        "description": "The server understood the request but refuses to authorize it."
     },
     404: {
-        "title": "404 Не найдено",
-        "description": "Ты искал, но не нашёл. Похоже, ты потерялся в виртуальных дебрях. Ресурс пропал как носки после стирки."
+        "title": "404 Not Found",
+        "description": "The requested resource could not be found but may be available in the future."
     },
     405: {
-        "title": "405 Метод не разрешён",
-        "description": "Ой, здесь такие методы не пройдут. Попробуй использовать что-то более общепринятое. Может, POST вместо PATCH?"
+        "title": "405 Method Not Allowed",
+        "description": "The request method is not supported by the resource."
     },
     406: {
-        "title": "406 Неприемлемо",
-        "description": "Ты что, издеваешься? Сервер не понимает, что ты тут натворил. Может, стоит попробовать включить гугл-переводчик для общения?"
+        "title": "406 Not Acceptable",
+        "description": "The requested resource is capable of generating only content not acceptable according to the Accept headers sent in the request."
     },
     407: {
-        "title": "407 Требуется аутентификация прокси",
-        "description": "Ой, забыл взять пропуск на прокси-сервер? Будь осторожнее, не все пути в интернете безопасны."
+        "title": "407 Proxy Authentication Required",
+        "description": "The client must first authenticate itself with the proxy."
     },
     408: {
-        "title": "408 Тайм-аут запроса",
-        "description": "Операция заняла слишком много времени, и сервер решил пойти на кофе. Попробуй отправить запрос ещё раз, когда он вернётся."
+        "title": "408 Request Timeout",
+        "description": "The server timed out waiting for the request."
     },
     409: {
-        "title": "409 Конфликт",
-        "description": "Ой, кажется, у нас здесь между собой не мирятся данные. Может, попробуем разгрести этот месс?"
+        "title": "409 Conflict",
+        "description": "The request could not be completed due to a conflict with the current state of the resource."
     },
     410: {
-        "title": "410 Удалён",
-        "description": "Тут был ресурс, а его уже нет. Как собака, которая прятала кость и теперь не помнит, где."
+        "title": "410 Gone",
+        "description": "The requested resource is no longer available and will not be available again."
     },
     411: {
-        "title": "411 Длина обязательна",
-        "description": "Ой, кажется, тебе здесь нужно предоставить больше данных. Сервер любит полноту информации, не обижай его."
+        "title": "411 Length Required",
+        "description": "The request did not specify the length of its content, which is required by the requested resource."
     },
     412: {
-        "title": "412 Предусловие не выполнено",
-        "description": "Тут есть некоторые требования, которые не были выполнены. Сервер ведёт себя, как вежливый хозяин, который ждёт, что гости снимут обувь."
+        "title": "412 Precondition Failed",
+        "description": "The server does not meet one of the preconditions that the requester put on the request header fields."
     },
     413: {
-        "title": "413 Payload слишком велик",
-        "description": "Ну ты и загрузил сервер. Попробуй отправить данные поменьше – он не такой уж и обжора."
+        "title": "413 Payload Too Large",
+        "description": "The request is larger than the server is willing or able to process."
     },
     414: {
-        "title": "414 URI слишком длинный",
-        "description": "Ты думал, что можно загрузить всю интернет-вселенную в одном URI? Не получится, перестань мечтать так крупно."
+        "title": "414 URI Too Long",
+        "description": "The URI provided was too long for the server to process."
     },
     415: {
-        "title": "415 Неподдерживаемый тип медиа",
-        "description": "Сервер не может обработать этот тип содержимого. Может, отправим ему что-то более распространённое?"
+        "title": "415 Unsupported Media Type",
+        "description": "The request entity has a media type which the server or resource does not support."
     },
     416: {
-        "title": "416 Запрашиваемый диапазон не удовлетворим",
-        "description": "Ты хочешь диапазон, которого здесь нет. Как просить кофе без кофеина – не получится."
+        "title": "416 Range Not Satisfiable",
+        "description": "The client has asked for a portion of the file, but the server cannot supply that portion."
     },
     417: {
-        "title": "417 Ожидание не удалось",
-        "description": "Сервер ожидал чего-то, но что-то пошло не так. Попробуй снова – может, повезёт."
+        "title": "417 Expectation Failed",
+        "description": "The server cannot meet the requirements of the Expect request-header field."
     },
     418: {
-        "title": "418 Я — чайник",
-        "description": "Тебе встречался код 418? Если да, то ты видимо пытался заварить чай на сервере. Попробуй кофе, он надёжнее."
+        "title": "418 I'm a teapot",
+        "description": "Any attempt to brew coffee with a teapot should result in the error code \"418 I'm a teapot\"."
     },
     421: {
-        "title": "421 Неправильный запрос от пользователя",
-        "description": "Что, ты снова пытался отправить запрос как кот, а не как человек? Попробуй ещё раз, но на этот раз чуть более серьёзно."
+        "title": "421 Misdirected Request",
+        "description": "The request was directed at a server that is not able to produce a response."
     },
     422: {
-        "title": "422 Невозможно обработать сущность",
-        "description": "Ух ты, сервер не понял, что ты ему сунул. Попробуй отправить что-то более стандартное – он не такой уж и экзотичный."
+        "title": "422 Unprocessable Entity",
+        "description": "The request was well-formed but was unable to be followed due to semantic errors."
     },
     423: {
-        "title": "423 Заблокировано",
-        "description": "Ты заблокирован, как непослушный ребёнок. Может, пора почитать книжку о том, как вести себя в интернете?"
+        "title": "423 Locked",
+        "description": "The resource that is being accessed is locked."
     },
     424: {
-        "title": "424 Неудовлетворённое зависимостью",
-        "description": "Ой, что-то зависит от чего-то другого, и это что-то не пришло. Как в реальной жизни – ждёшь подарок, а его не было."
+        "title": "424 Failed Dependency",
+        "description": "The request failed due to failure of a previous request."
     },
     425: {
-        "title": "425 Слишком рано",
-        "description": "Сервер ещё не готов принимать запросы. Подожди немного – он ещё не проснулся."
+        "title": "425 Too Early",
+        "description": "Indicates that the server is unwilling to risk processing a request that might be replayed."
     },
     426: {
-        "title": "426 Обнови документ",
-        "description": "Требуется обновить документ. Версия, которую ты используешь, как антиквариат. Попробуй обновиться, ведь и к тебе придут за новым iPhone, а не за телефоном с кнопками."
+        "title": "426 Upgrade Required",
+        "description": "The client should switch to a different protocol."
     },
     428: {
-        "title": "428 Требуется предварительная загрузка",
-        "description": "Ты что, не слышал о предварительной загрузке? Не теряй время, быстрее загружай."
+        "title": "428 Precondition Required",
+        "description": "The origin server requires the request to be conditional."
     },
     429: {
-        "title": "429 Слишком много запросов",
-        "description": "Серьёзно? Ты думаешь, что постоянно обновляя страницу, всё заработает быстрее? Или ты просто пытаешься сломать сайт? Успокойся, вдохни и подумай о чём-нибудь приятном. Если ты не робот, то у тебя точно есть совесть, правда? Дай серверу передохнуть! Может, почитай книжку пока что?"
+        "title": "429 Too Many Requests",
+        "description": "The user has sent too many requests in a given amount of time."
     },
     431: {
-        "title": "431 Слишком много заголовков запроса",
-        "description": "Ну ты загрузил сервер. Может, уберёшь немного этого? Он не такой уж и просторный."
+        "title": "431 Request Header Fields Too Large",
+        "description": "The server is unwilling to process the request because either an individual header field, or all the header fields collectively, are too large."
     },
     451: {
-        "title": "451 Недоступно по юридическим причинам",
-        "description": "Сайт заблокирован по юридическим причинам. Что, ты опять пытался найти пиратский контент?"
+        "title": "451 Unavailable For Legal Reasons",
+        "description": "A server operator has received a legal demand to deny access to a resource or to a set of resources."
     },
     500: {
-        "title": "500 Внутренняя ошибка сервера",
-        "description": "Ну вот, что-то сервер совсем сломался. Кажется, программисты опять сделали что-то не так. Успокойся, всё будет хорошо… когда-нибудь."
+        "title": "500 Internal Server Error",
+        "description": "The server encountered an unexpected condition that prevented it from fulfilling the request."
     },
     501: {
-        "title": "501 Не реализовано",
-        "description": "Ой, здесь такие технологии не реализованы. В следующий раз, когда придёшь, можешь попросить их добавить?"
+        "title": "501 Not Implemented",
+        "description": "The server either does not recognize the request method, or it lacks the ability to fulfill the request."
     },
     502: {
-        "title": "502 Плохой шлюз",
-        "description": "Сервер получил странный ответ от другого сервера. Похоже, где-то между серверами произошла перепалка. Жаль, что ты попал под раздачу."
+        "title": "502 Bad Gateway",
+        "description": "The server, while acting as a gateway or proxy, received an invalid response from an upstream server."
     },
     503: {
-        "title": "503 Сервис недоступен",
-        "description": "Сегодня не твой день. Сервер взял отгул, попробуй вернуться позже, когда он будет в настроении работать."
+        "title": "503 Service Unavailable",
+        "description": "The server is currently unable to handle the request due to a temporary overload or scheduled maintenance."
     },
     504: {
-        "title": "504 Шлюз не отвечает",
-        "description": "Кажется, сервер тоже не любит ждать. Попробуй обновить страницу, но не переусердствуй – он ведь мог уйти на кофе."
+        "title": "504 Gateway Timeout",
+        "description": "The server, while acting as a gateway or proxy, did not receive a timely response from an upstream server."
     },
     505: {
-        "title": "505 HTTP-версия не поддерживается",
-        "description": "Ты опять пытался использовать HTTP 1.0 в XXI веке? Попробуй обновиться до более новой версии, вот тебе и экономия времени."
+        "title": "505 HTTP Version Not Supported",
+        "description": "The server does not support the HTTP protocol version used in the request."
     },
     506: {
-        "title": "506 Вариант тоже вариант",
-        "description": "Ой, ты пытался передать вариант, который здесь уже есть. Попробуй не перегружать сервер повторяющимися данными."
+        "title": "506 Variant Also Negotiates",
+        "description": "Transparent content negotiation for the request results in a circular reference."
     },
     507: {
-        "title": "507 Превышен лимит хранилища",
-        "description": "Ты превысил доступный объём данных. Не забудь убрать старые фотографии с телефона – сервер тоже человек, и ему тесно."
+        "title": "507 Insufficient Storage",
+        "description": "The server is unable to store the representation needed to complete the request."
     },
     508: {
-        "title": "508 Обнаружено переполнение петли",
-        "description": "Ой, мы тут в петле. Вероятно, ты натворил что-то, что привело к зацикливанию. Может, стоит попросить разработчиков разобраться?"
+        "title": "508 Loop Detected",
+        "description": "The server detected an infinite loop while processing the request."
     },
     510: {
-        "title": "510 Не расширено",
-        "description": "Тут такой функциональности нет. Может, это будет хорошей идеей для следующего обновления? Хотя, кто знает."
+        "title": "510 Not Extended",
+        "description": "Further extensions to the request are required for the server to fulfill it."
     },
     511: {
-        "title": "511 Требуется аутентификация сети",
-        "description": "Как это требуется аутентификация сети? Ты в интернете, не на войне. Может, соседи взломали Wi-Fi?"
-    },
-    520: {
-        "title": "520 Неизвестная ошибка",
-        "description": "Ой, что-то пошло не так. Лучше попробуй перезагрузить всё и вся – может, это поможет."
-    },
-    521: {
-        "title": "521 Веб-сервер не работает",
-        "description": "Сервер лежит и не хочет вставать. Попробуй позвонить администратору – может, ему стоит поставить красную кнопку?"
-    },
-    522: {
-        "title": "522 Соединение веб-сервера не отвечает",
-        "description": "Сервер игнорирует твои попытки. Попробуй погладить его по локтю – может, он отзовётся."
-    },
-    523: {
-        "title": "523 Ошибка прошивки",
-        "description": "Ой, прошивка сервера не вышла. Может, разработчики забыли обновиться?"
-    },
-    524: {
-        "title": "524 Превышено время ожидания",
-        "description": "Ты уже не терпишь? Сервер тоже, попробуй не так долго ждать."
-    },
-    525: {
-        "title": "525 SSL-соединение не установлено",
-        "description": "Ой, SSL не хочет соединяться. Может, это знак, что тебе стоит заняться чем-то другим?"
-    },
-    526: {
-        "title": "526 Недействительный сертификат SSL",
-        "description": "Сервер не узнал твой сертификат. Может, попробуй пожать ему руку, чтобы он узнал тебя лично?"
-    },
-    527: {
-        "title": "527 Служба заблокирована",
-        "description": "Тут заблокировали доступ. Попробуй зайти позже, или это твой последний визит?"
+        "title": "511 Network Authentication Required",
+        "description": "The client needs to authenticate to gain network access."
     }
 }
