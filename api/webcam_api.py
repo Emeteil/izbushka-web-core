@@ -235,7 +235,7 @@ async def get_webcam_quality(payload: dict = login_required()):
         "statistics": stats
     })
 
-@router.post("/quality", 
+@router.put("/quality", 
     response_model=WebcamQualityResponse, 
     summary="Установить настройки качества камеры", 
     description="Позволяет изменить настройки видеопотока (качество, разрешение, FPS, автоподстройку). При некоторых изменениях (особенно FPS) возможен перезапуск захвата кадра."
@@ -278,7 +278,7 @@ async def set_webcam_quality(req: WebcamQualityRequest, payload: dict = login_re
         "message": "Video quality settings updated" + (" and capture restarted" if restart_required else "")
     })
 
-@router.get("/reset_stats", 
+@router.post("/stats/reset", 
     summary="Сбросить статистику производительности", 
     description="Очищает собранную статистику задержек кадров, захвата и кодирования."
 )

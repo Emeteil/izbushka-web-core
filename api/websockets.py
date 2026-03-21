@@ -18,7 +18,7 @@ async def websocket_endpoint(websocket: WebSocket):
     
     try:
         await websocket.send_json({
-            "event": "emotion_changed",
+            "event": "system.emotion_changed",
             "data": {
                 "emotion": g_settings.current_emotion,
                 "source": "system"
@@ -27,7 +27,7 @@ async def websocket_endpoint(websocket: WebSocket):
         
         connected = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
         await websocket.send_json({
-            "event": "connection_status",
+            "event": "system.connection_status",
             "data": {
                 "connected": connected,
                 "port": settings.get("com_link_rt_port")
@@ -41,13 +41,13 @@ async def websocket_endpoint(websocket: WebSocket):
                 event = data.get("event")
                 payload_data = data.get("data", {})
                 
-                if event == "set_emotion":
+                if event == "emotion.set":
                     emotion = payload_data.get("emotion")
                     valid_emotions = settings["emotions"]["ids"]
                     if emotion in valid_emotions:
                         g_settings.current_emotion = emotion
                         await manager.broadcast({
-                            "event": "emotion_changed",
+                            "event": "system.emotion_changed",
                             "data": {
                                 "emotion": emotion,
                                 "source": "websocket",
@@ -55,15 +55,15 @@ async def websocket_endpoint(websocket: WebSocket):
                             }
                         })
                     else:
-                        await websocket.send_json({"event": "error", "data": {"message": "Invalid emotion"}})
+                        await websocket.send_json({"event": "system.error", "data": {"message": "Invalid emotion"}})
                 
-                elif event == "get_emotion":
-                    await websocket.send_json({"event": "current_emotion", "data": {"emotion": g_settings.current_emotion}})
+                elif event == "emotion.get":
+                    await websocket.send_json({"event": "emotion.current", "data": {"emotion": g_settings.current_emotion}})
                 
-                elif event == "get_sensor_data":
+                elif event == "sensor.get_data":
                     sensor_resp = {}
                     if not com_link_connection or not com_link_connection.ser or not com_link_connection.ser.is_open:
-                        await websocket.send_json({"event": "error", "data": {"message": "ComLink RT connection not established"}})
+                        await websocket.send_json({"event": "system.error", "data": {"message": "ComLink RT connection not established"}})
                         continue
                         
                     if com_link_commands:
@@ -83,84 +83,84 @@ async def websocket_endpoint(websocket: WebSocket):
                         if getattr(cmd, 'is_subscribed', False) and getattr(cmd, 'last_data', None) is not None:
                             sensor_resp['millis'] = {"millis": cmd.last_data}
 
-                    await websocket.send_json({"event": "current_sensor_data", "data": sensor_resp})
+                    await websocket.send_json({"event": "sensor.data", "data": sensor_resp})
                 
-                elif event == "send_command":
+                elif event.startswith("robot."):
                     if not com_link_connection or not com_link_connection.ser or not com_link_connection.ser.is_open:
-                        await websocket.send_json({"event": "error", "data": {"message": "ComLink RT connection not established"}})
+                        await websocket.send_json({"event": "system.error", "data": {"message": "ComLink RT connection not established"}})
                         continue
                     
-                    command_type = payload_data.get("type")
-                    command_data = payload_data.get("data", {})
+                    target = event.split(".")[1]
+                    action = payload_data.get("action")
                     wait_response = payload_data.get("wait_response", True)
                     
                     try:
-                        if command_type == "ping":
+                        if target == "ping":
                             cmd = com_link_commands.get('ping')
                             if cmd:
                                 result = cmd.execute()
-                                await websocket.send_json({"event": "command_result", "data": {
-                                    "type": "ping",
+                                await websocket.send_json({"event": "command.result", "data": {
+                                    "target": "ping",
                                     "success": result is not None
                                 }})
-                        elif command_type == "motors":
+                        elif target == "motors":
                             cmd = com_link_commands.get('motors')
                             if cmd:
-                                subcommand = command_data.get("command")
                                 success = False
-                                if subcommand == "set_speed":
-                                    motor_mask = command_data.get("motor_mask", cmd.MOTOR_BOTH)
-                                    speed_left = command_data.get("speed_left", 0)
-                                    speed_right = command_data.get("speed_right", 0)
+                                if action == "set_speed":
+                                    motor_mask = payload_data.get("motor_mask", cmd.MOTOR_BOTH)
+                                    speed_left = payload_data.get("speed_left", 0)
+                                    speed_right = payload_data.get("speed_right", 0)
                                     success = cmd.set_speed(motor_mask, speed_left, speed_right, wait_response=wait_response)
-                                elif subcommand == "move_forward":
-                                    speed = command_data.get("speed", 150)
+                                elif action == "move_forward":
+                                    speed = payload_data.get("speed", 150)
                                     success = cmd.move_forward(speed, wait_response=wait_response)
-                                elif subcommand == "move_backward":
-                                    speed = command_data.get("speed", 150)
+                                elif action == "move_backward":
+                                    speed = payload_data.get("speed", 150)
                                     success = cmd.move_backward(speed, wait_response=wait_response)
-                                elif subcommand == "turn_left":
-                                    speed = command_data.get("speed", 150)
+                                elif action == "turn_left":
+                                    speed = payload_data.get("speed", 150)
                                     success = cmd.turn_left(speed, wait_response=wait_response)
-                                elif subcommand == "turn_right":
-                                    speed = command_data.get("speed", 150)
+                                elif action == "turn_right":
+                                    speed = payload_data.get("speed", 150)
                                     success = cmd.turn_right(speed, wait_response=wait_response)
-                                elif subcommand == "stop":
+                                elif action == "stop":
                                     success = cmd.stop_all(wait_response=wait_response)
-                                elif subcommand == "brake":
+                                elif action == "brake":
                                     success = cmd.brake(wait_response=wait_response)
 
                                 if wait_response:
-                                    await websocket.send_json({"event": "command_result", "data": {
-                                        "type": "motors",
-                                        "command": subcommand,
+                                    await websocket.send_json({"event": "command.result", "data": {
+                                        "target": "motors",
+                                        "action": action,
                                         "success": success
                                     }})
-                        elif command_type == "servo":
+                        elif target == "servo":
                             cmd = com_link_commands.get('servo')
                             if cmd:
-                                subcommand = command_data.get("command")
                                 success = False
-                                if subcommand == "move_immediate":
-                                    channel = command_data.get("channel", 0)
-                                    angle = command_data.get("angle", 90)
+                                if action == "move_immediate":
+                                    channel = payload_data.get("channel", 0)
+                                    angle = payload_data.get("angle", 90)
                                     success = cmd.move_immediate(channel, angle, wait_response=wait_response)
-                                elif subcommand == "move_smooth":
-                                    channel = command_data.get("channel", 0)
-                                    angle = command_data.get("angle", 90)
-                                    step_delay = command_data.get("step_delay", 50)
+                                elif action == "move_smooth":
+                                    channel = payload_data.get("channel", 0)
+                                    angle = payload_data.get("angle", 90)
+                                    step_delay = payload_data.get("step_delay", 50)
                                     success = cmd.move_smooth_high(channel, angle, step_delay, wait_response=wait_response)
 
                                 if wait_response:
-                                    await websocket.send_json({"event": "command_result", "data": {
-                                        "type": "servo",
-                                        "command": subcommand,
+                                    await websocket.send_json({"event": "command.result", "data": {
+                                        "target": "servo",
+                                        "action": action,
                                         "success": success
                                     }})
                         else:
-                            await websocket.send_json({"event": "error", "data": {"message": f"Unknown command type: {command_type}"}})
+                            await websocket.send_json({"event": "system.error", "data": {"message": f"Unknown robot target: {target}"}})
                     except Exception as e:
-                        await websocket.send_json({"event": "error", "data": {"message": str(e)}})
+                        await websocket.send_json({"event": "system.error", "data": {"message": str(e)}})
+                else:
+                    await websocket.send_json({"event": "system.error", "data": {"message": f"Unknown event namespace: {event}"}})
             except json.JSONDecodeError:
                 pass
                 

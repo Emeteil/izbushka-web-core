@@ -114,7 +114,7 @@ async function updateVideoSettings() {
 
     try {
         const response = await fetch('/api/webcam/quality', {
-            method: 'POST',
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
@@ -170,7 +170,8 @@ async function getWebcamStatus() {
 async function resetStats() {
     try {
         const token = getToken();
-        const response = await fetch('/api/webcam/reset_stats', {
+        const response = await fetch('/api/webcam/stats/reset', {
+            method: 'POST',
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -204,7 +205,7 @@ document.getElementById('quality-slider').addEventListener('input', function () 
 async function loadEmotions() {
     try {
         const token = getToken();
-        const response = await fetch('/api/emotions/list', {
+        const response = await fetch('/api/emotions', {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -242,8 +243,8 @@ async function setEmotion(emotionId) {
 
     try {
         const token = getToken();
-        const response = await fetch('/api/emotions/set', {
-            method: 'POST',
+        const response = await fetch('/api/emotions/current', {
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
@@ -294,11 +295,11 @@ function initWebSocket() {
         updateConnectionStatus(false);
     });
 
-    socket.on('connection_status', (data) => {
+    socket.on('system.connection_status', (data) => {
         updateConnectionStatus(data.connected);
     });
 
-    socket.on('sensor_data', (data) => {
+    socket.on('sensor.data', (data) => {
         updateSensorData(data);
     });
 
@@ -307,9 +308,9 @@ function initWebSocket() {
         showMessage(error.message, 'red');
     });
 
-    socket.on('command_result', (result) => {
+    socket.on('command.result', (result) => {
         console.log('Command result:', result);
-        if (result.type === 'ping') {
+        if (result.target === 'ping') {
             document.getElementById('ping-result').textContent =
                 result.success ? 'Ping successful!' : 'Ping failed!';
         }
@@ -422,33 +423,24 @@ function initCharts() {
 
 function sendMotorCommand(command) {
     const speed = parseInt(document.getElementById('motor-speed').value);
-    socket.emit('send_command', {
-        type: 'motors',
-        data: {
-            command: command,
-            speed: speed
-        }
+    socket.emit('robot.motors', {
+        action: command,
+        speed: speed
     });
 }
 
 function sendServoCommand(command) {
     const channel = parseInt(document.getElementById('servo-channel').value);
     const angle = parseInt(document.getElementById('servo-angle').value);
-    socket.emit('send_command', {
-        type: 'servo',
-        data: {
-            command: command,
-            channel: channel,
-            angle: angle
-        }
+    socket.emit('robot.servo', {
+        action: command,
+        channel: channel,
+        angle: angle
     });
 }
 
 function sendPing() {
-    socket.emit('send_command', {
-        type: 'ping',
-        data: {}
-    });
+    socket.emit('robot.ping', {});
 }
 
 document.getElementById('motor-speed').addEventListener('input', function () {

@@ -29,7 +29,7 @@ async def lifespan(app):
             def on_distance_data(distance):
                 if distance is not None:
                     asyncio.run_coroutine_threadsafe(
-                        manager.broadcast({"event": "sensor_data", "data": {"distance": {"distance_cm": distance}}}),
+                        manager.broadcast({"event": "sensor.data", "data": {"distance": {"distance_cm": distance}}}),
                         loop
                     )
 
@@ -37,7 +37,7 @@ async def lifespan(app):
                 if data is not None:
                     cmd = com_link_commands['gyro']
                     asyncio.run_coroutine_threadsafe(
-                        manager.broadcast({"event": "sensor_data", "data": {"gyro": {
+                        manager.broadcast({"event": "sensor.data", "data": {"gyro": {
                             "accel": cmd.get_acceleration(data),
                             "gyro": cmd.get_rotation(data),
                             "temperature": cmd.get_temperature(data)
@@ -48,7 +48,7 @@ async def lifespan(app):
             def on_millis_data(millis):
                 if millis is not None:
                     asyncio.run_coroutine_threadsafe(
-                        manager.broadcast({"event": "sensor_data", "data": {"millis": {"millis": millis}}}),
+                        manager.broadcast({"event": "sensor.data", "data": {"millis": {"millis": millis}}}),
                         loop
                     )
 

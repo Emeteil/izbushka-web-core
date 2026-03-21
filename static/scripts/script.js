@@ -54,12 +54,12 @@ class RobotEmotions {
             console.log('Connected to WebSocket server');
         });
         
-        this.socket.on('emotion_changed', (data) => {
+        this.socket.on('system.emotion_changed', (data) => {
             console.log('Emotion changed via WebSocket:', data.emotion);
             this.setEmotion(data.emotion);
         });
         
-        this.socket.on('current_emotion', (data) => {
+        this.socket.on('emotion.current', (data) => {
             console.log('Current emotion:', data.emotion);
             this.setEmotion(data.emotion);
         });
@@ -88,15 +88,15 @@ class RobotEmotions {
 
     setEmotionViaAPI(emotion) {
         if (this.socket && this.socket.connected) {
-            this.socket.emit('set_emotion', { emotion: emotion });
+            this.socket.emit('emotion.set', { emotion: emotion });
         } else {
             this.setEmotionViaHTTP(emotion);
         }
     }
 
     setEmotionViaHTTP(emotion) {
-        fetch('/api/emotions/set', {
-            method: 'POST',
+        fetch('/api/emotions/current', {
+            method: 'PUT',
             headers: this.getAuthHeaders(),
             body: JSON.stringify({ emotion: emotion })
         })

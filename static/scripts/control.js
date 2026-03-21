@@ -59,12 +59,9 @@ joystickManager.on('end', function () {
 });
 
 function sendCommand(cmd, speed) {
-    socket.emit('send_command', {
-        type: 'motors',
-        data: {
-            command: cmd,
-            speed: speed
-        },
+    socket.emit('robot.motors', {
+        action: cmd,
+        speed: speed,
         wait_response: false
     });
 }
@@ -78,13 +75,10 @@ function rotateTurret(direction) {
 
     localStorage.setItem('turret_angle', currentAngle);
 
-    socket.emit('send_command', {
-        type: 'servo',
-        data: {
-            command: 'move_smooth',
-            channel: 0,
-            angle: currentAngle
-        },
+    socket.emit('robot.servo', {
+        action: 'move_smooth',
+        channel: 0,
+        angle: currentAngle,
         wait_response: false
     });
     updateStatus(`TURRET: ${currentAngle}°`);
@@ -104,7 +98,7 @@ socket.on('disconnect', () => {
     updateStatus('CONNECTION LOST');
 });
 
-socket.on('sensor_data', (data) => {
+socket.on('sensor.data', (data) => {
     if (data.distance) {
         document.getElementById('sensor-dist').textContent = data.distance.distance_cm + ' CM';
     }
@@ -217,7 +211,7 @@ document.getElementById('btn-turret-right').addEventListener('click', () => rota
 
 async function loadEmotions() {
     try {
-        const response = await fetch('/api/emotions/list', {
+        const response = await fetch('/api/emotions', {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -252,8 +246,8 @@ async function setEmotion(emotionId) {
     setUIEmotion(emotionId);
 
     try {
-        await fetch('/api/emotions/set', {
-            method: 'POST',
+        await fetch('/api/emotions/current', {
+            method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
