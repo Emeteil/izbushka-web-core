@@ -1,7 +1,7 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from utils.connection_manager import manager
 from authorization import get_current_user_ws
-from settings import app, settings, com_link_connection, com_link_commands
+from settings import app, settings, com_link_connection, com_link_commands, transport_bus
 import settings as g_settings
 import json
 
@@ -25,12 +25,16 @@ async def websocket_endpoint(websocket: WebSocket):
             }
         })
         
-        connected = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
+        is_hardware = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
+        vl = transport_bus.get("virtual_link")
+        is_virtual = vl is not None and vl.enabled and getattr(vl, 'is_connected', False)
+        connected = is_hardware or is_virtual
         await websocket.send_json({
             "event": "system.connection_status",
             "data": {
                 "connected": connected,
-                "port": settings.get("com_link_rt_port")
+                "port": settings.get("com_link_rt_port"),
+                "transport": transport_bus.status()
             }
         })
 
@@ -62,32 +66,37 @@ async def websocket_endpoint(websocket: WebSocket):
                 
                 elif event == "sensor.get_data":
                     sensor_resp = {}
-                    if not com_link_connection or not com_link_connection.ser or not com_link_connection.ser.is_open:
-                        await websocket.send_json({"event": "system.error", "data": {"message": "ComLink RT connection not established"}})
-                        continue
+                    
+                    cmd_dist = com_link_commands.get('distance') if com_link_commands else None
+                    if cmd_dist and getattr(cmd_dist, 'is_subscribed', False) and getattr(cmd_dist, 'last_distance', None) is not None:
+                        sensor_resp['distance'] = {"distance_cm": cmd_dist.last_distance}
+                    elif transport_bus.has_active():
+                        dist = transport_bus.execute("distance", "execute")
+                        if dist is not None: sensor_resp['distance'] = {"distance_cm": dist}
                         
-                    if com_link_commands:
-                        cmd = com_link_commands.get('distance')
-                        if getattr(cmd, 'is_subscribed', False) and getattr(cmd, 'last_distance', None) is not None:
-                            sensor_resp['distance'] = {"distance_cm": cmd.last_distance}
-                            
-                        cmd = com_link_commands.get('gyro')
-                        if getattr(cmd, 'is_subscribed', False) and getattr(cmd, 'last_data', None) is not None:
-                            sensor_resp['gyro'] = {
-                                "accel": cmd.get_acceleration(cmd.last_data),
-                                "gyro": cmd.get_rotation(cmd.last_data),
-                                "temperature": cmd.get_temperature(cmd.last_data)
-                            }
-                            
-                        cmd = com_link_commands.get('millis')
-                        if getattr(cmd, 'is_subscribed', False) and getattr(cmd, 'last_data', None) is not None:
-                            sensor_resp['millis'] = {"millis": cmd.last_data}
+                    cmd_gyro = com_link_commands.get('gyro') if com_link_commands else None
+                    if cmd_gyro and getattr(cmd_gyro, 'is_subscribed', False) and getattr(cmd_gyro, 'last_data', None) is not None:
+                        sensor_resp['gyro'] = {
+                            "accel": cmd_gyro.get_acceleration(cmd_gyro.last_data),
+                            "gyro": cmd_gyro.get_rotation(cmd_gyro.last_data),
+                            "temperature": cmd_gyro.get_temperature(cmd_gyro.last_data)
+                        }
+                    elif transport_bus.has_active():
+                        gyro = transport_bus.execute("gyro", "execute")
+                        if gyro is not None: sensor_resp['gyro'] = gyro
+                        
+                    cmd_millis = com_link_commands.get('millis') if com_link_commands else None
+                    if cmd_millis and getattr(cmd_millis, 'is_subscribed', False) and getattr(cmd_millis, 'last_data', None) is not None:
+                        sensor_resp['millis'] = {"millis": cmd_millis.last_data}
+                    elif transport_bus.has_active():
+                        millis = transport_bus.execute("millis", "execute")
+                        if millis is not None: sensor_resp['millis'] = {"millis": millis}
 
                     await websocket.send_json({"event": "sensor.data", "data": sensor_resp})
                 
                 elif event.startswith("robot."):
-                    if not com_link_connection or not com_link_connection.ser or not com_link_connection.ser.is_open:
-                        await websocket.send_json({"event": "system.error", "data": {"message": "ComLink RT connection not established"}})
+                    if not transport_bus.has_active():
+                        await websocket.send_json({"event": "system.error", "data": {"message": "No active transport subscribers"}})
                         continue
                     
                     target = event.split(".")[1]
@@ -96,65 +105,70 @@ async def websocket_endpoint(websocket: WebSocket):
                     
                     try:
                         if target == "ping":
-                            cmd = com_link_commands.get('ping')
-                            if cmd:
-                                result = cmd.execute()
-                                await websocket.send_json({"event": "command.result", "data": {
-                                    "target": "ping",
-                                    "success": result is not None
-                                }})
+                            result = transport_bus.execute("ping", "execute")
+                            await websocket.send_json({"event": "command.result", "data": {
+                                "target": "ping",
+                                "success": result is not None
+                            }})
                         elif target == "motors":
-                            cmd = com_link_commands.get('motors')
-                            if cmd:
-                                success = False
-                                if action == "set_speed":
-                                    motor_mask = payload_data.get("motor_mask", cmd.MOTOR_BOTH)
-                                    speed_left = payload_data.get("speed_left", 0)
-                                    speed_right = payload_data.get("speed_right", 0)
-                                    success = cmd.set_speed(motor_mask, speed_left, speed_right, wait_response=wait_response)
-                                elif action == "move_forward":
-                                    speed = payload_data.get("speed", 150)
-                                    success = cmd.move_forward(speed, wait_response=wait_response)
-                                elif action == "move_backward":
-                                    speed = payload_data.get("speed", 150)
-                                    success = cmd.move_backward(speed, wait_response=wait_response)
-                                elif action == "turn_left":
-                                    speed = payload_data.get("speed", 150)
-                                    success = cmd.turn_left(speed, wait_response=wait_response)
-                                elif action == "turn_right":
-                                    speed = payload_data.get("speed", 150)
-                                    success = cmd.turn_right(speed, wait_response=wait_response)
-                                elif action == "stop":
-                                    success = cmd.stop_all(wait_response=wait_response)
-                                elif action == "brake":
-                                    success = cmd.brake(wait_response=wait_response)
+                            success = False
+                            if action == "set_speed":
+                                motor_mask = payload_data.get("motor_mask", 0x03)
+                                speed_left = payload_data.get("speed_left", 0)
+                                speed_right = payload_data.get("speed_right", 0)
+                                success = transport_bus.execute("motors", "set_speed",
+                                    motor_mask=motor_mask, speed_left=speed_left,
+                                    speed_right=speed_right, wait_response=wait_response)
+                            elif action == "move_forward":
+                                speed = payload_data.get("speed", 150)
+                                success = transport_bus.execute("motors", "move_forward",
+                                    speed=speed, wait_response=wait_response)
+                            elif action == "move_backward":
+                                speed = payload_data.get("speed", 150)
+                                success = transport_bus.execute("motors", "move_backward",
+                                    speed=speed, wait_response=wait_response)
+                            elif action == "turn_left":
+                                speed = payload_data.get("speed", 150)
+                                success = transport_bus.execute("motors", "turn_left",
+                                    speed=speed, wait_response=wait_response)
+                            elif action == "turn_right":
+                                speed = payload_data.get("speed", 150)
+                                success = transport_bus.execute("motors", "turn_right",
+                                    speed=speed, wait_response=wait_response)
+                            elif action == "stop":
+                                success = transport_bus.execute("motors", "stop_all",
+                                    wait_response=wait_response)
+                            elif action == "brake":
+                                success = transport_bus.execute("motors", "brake",
+                                    wait_response=wait_response)
 
-                                if wait_response:
-                                    await websocket.send_json({"event": "command.result", "data": {
-                                        "target": "motors",
-                                        "action": action,
-                                        "success": success
-                                    }})
+                            if wait_response:
+                                await websocket.send_json({"event": "command.result", "data": {
+                                    "target": "motors",
+                                    "action": action,
+                                    "success": success
+                                }})
                         elif target == "servo":
-                            cmd = com_link_commands.get('servo')
-                            if cmd:
-                                success = False
-                                if action == "move_immediate":
-                                    channel = payload_data.get("channel", 0)
-                                    angle = payload_data.get("angle", 90)
-                                    success = cmd.move_immediate(channel, angle, wait_response=wait_response)
-                                elif action == "move_smooth":
-                                    channel = payload_data.get("channel", 0)
-                                    angle = payload_data.get("angle", 90)
-                                    step_delay = payload_data.get("step_delay", 50)
-                                    success = cmd.move_smooth_high(channel, angle, step_delay, wait_response=wait_response)
+                            success = False
+                            if action == "move_immediate":
+                                channel = payload_data.get("channel", 0)
+                                angle = payload_data.get("angle", 90)
+                                success = transport_bus.execute("servo", "move_immediate",
+                                    channel=channel, angle=angle, wait_response=wait_response)
+                            elif action == "move_smooth":
+                                channel = payload_data.get("channel", 0)
+                                angle = payload_data.get("angle", 90)
+                                step_delay = payload_data.get("step_delay", 50)
+                                success = transport_bus.execute("servo", "move_smooth_high",
+                                    channel=channel, angle=angle, step_delay_ms=step_delay,
+                                    wait_response=wait_response)
 
-                                if wait_response:
-                                    await websocket.send_json({"event": "command.result", "data": {
-                                        "target": "servo",
-                                        "action": action,
-                                        "success": success
-                                    }})
+                            if wait_response:
+                                await websocket.send_json({"event": "command.result", "data": {
+                                    "target": "servo",
+                                    "action": action,
+                                    "success": success
+                                }})
                         else:
                             await websocket.send_json({"event": "system.error", "data": {"message": f"Unknown robot target: {target}"}})
                     except Exception as e:

@@ -33,7 +33,7 @@ async def api_login(request: Request, response: Response, req: LoginRequest):
         "message": "Login successful",
         "user_id": user["id"],
         "nickname": user["nickname"],
-        "preferred_redirect": "/"
+        "preferred_redirect": "/control"
     }
     
     api_resp = apiResponse(resp_data, 200)

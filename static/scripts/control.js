@@ -1,3 +1,15 @@
+function getCookie(name) {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop().split(';').shift();
+    return null;
+}
+
+const token = getCookie('token');
+const socket = io({
+    query: { token: token }
+});
+
 const joystickManager = nipplejs.create({
     zone: document.getElementById('joystick-container'),
     mode: 'static',
@@ -6,65 +18,81 @@ const joystickManager = nipplejs.create({
     size: 150
 });
 
-const token = getCookie('token');
-const socket = io({
-    query: { token: token }
-});
+const SEND_INTERVAL_MS = 230;
+const DEAD_ZONE = 0.3;
+const MIN_SPEED = 100;
+const MAX_SPEED = 255;
 
-let lastCommand = 'stop';
-let currentSpeed = 150;
+let lastSentAction = null;
+let lastSentSpeed = null;
+let sendTimer = null;
+let pendingCommand = null;
 
-function getCookie(name) {
-    const value = `; ${document.cookie}`;
-    const parts = value.split(`; ${name}=`);
-    if (parts.length === 2) return parts.pop().split(';').shift();
-    return null;
+function angleToAction(angle) {
+    if (angle >= 45 && angle < 135) return 'move_forward';
+    if (angle >= 135 && angle < 225) return 'turn_left';
+    if (angle >= 225 && angle < 315) return 'move_backward';
+    return 'turn_right';
 }
 
-joystickManager.on('move', function (evt, data) {
-    if (data.direction) {
-        if (data.force < 0.2) return;
+function forceToSpeed(force) {
+    const clamped = Math.min(Math.max(force, DEAD_ZONE), 2.0);
+    const ratio = (clamped - DEAD_ZONE) / (2.0 - DEAD_ZONE);
+    return Math.round(MIN_SPEED + ratio * (MAX_SPEED - MIN_SPEED));
+}
 
-        const angle = data.angle.degree;
-        const force = Math.min(data.force, 2.0);
-
-        currentSpeed = Math.floor(Math.min(255, Math.max(100, force * 100)));
-        document.getElementById('speed-val').textContent = currentSpeed;
-
-        let command = 'stop';
-
-        if (angle > 90 - 45 && angle < 90 + 45)
-            command = 'move_forward';
-        else if (angle > 270 - 45 && angle < 270 + 45)
-            command = 'move_backward';
-        else if (angle > 180 - 45 && angle < 180 + 45)
-            command = 'turn_left';
-        else if (angle < 45 || angle > 315)
-            command = 'turn_right';
-
-        if (command !== lastCommand || command !== 'stop') {
-            sendCommand(command, currentSpeed);
-            lastCommand = command;
-            updateStatus(`MOVING: ${command.toUpperCase()}`);
-        }
-    }
-});
-
-joystickManager.on('end', function () {
-    sendCommand('stop', 0);
-    lastCommand = 'stop';
-    currentSpeed = 0;
-    document.getElementById('speed-val').textContent = currentSpeed;
-    updateStatus('SYSTEM IDLE');
-});
-
-function sendCommand(cmd, speed) {
+function sendCommand(action, speed) {
     socket.emit('robot.motors', {
-        action: cmd,
+        action: action,
         speed: speed,
         wait_response: false
     });
+    lastSentAction = action;
+    lastSentSpeed = speed;
 }
+
+function scheduleSend(action, speed) {
+    pendingCommand = { action, speed };
+
+    if (sendTimer) return;
+
+    flushPending();
+    sendTimer = setTimeout(() => {
+        sendTimer = null;
+        if (pendingCommand) flushPending();
+    }, SEND_INTERVAL_MS);
+}
+
+function flushPending() {
+    if (!pendingCommand) return;
+    const { action, speed } = pendingCommand;
+    pendingCommand = null;
+
+    if (action === lastSentAction && speed === lastSentSpeed) return;
+
+    sendCommand(action, speed);
+    updateStatus(`MOVING: ${action.toUpperCase()}`);
+    document.getElementById('speed-val').textContent = speed;
+}
+
+joystickManager.on('move', function (_evt, data) {
+    if (!data.direction) return;
+    if (data.force < DEAD_ZONE) return;
+
+    const action = angleToAction(data.angle.degree);
+    const speed = forceToSpeed(data.force);
+
+    scheduleSend(action, speed);
+});
+
+joystickManager.on('end', function () {
+    pendingCommand = null;
+    if (sendTimer) { clearTimeout(sendTimer); sendTimer = null; }
+
+    sendCommand('stop', 0);
+    document.getElementById('speed-val').textContent = 0;
+    updateStatus('SYSTEM IDLE');
+});
 
 function rotateTurret(direction) {
     let currentAngle = parseInt(localStorage.getItem('turret_angle') || '90');

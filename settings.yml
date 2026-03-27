@@ -3,6 +3,18 @@ port: 80
 
 com_link_rt_port: "COM4"
 
+transport:
+  com_link_rt:
+    enabled: true
+  virtual_link:
+    enabled: true
+    host: "127.0.0.1"
+    port: 5470
+    virtual_camera: true
+  console_logger:
+    enabled: false
+    log_level: "DEBUG"
+
 open_browser_on_start: false
 
 users_json_path: "database/users.json"

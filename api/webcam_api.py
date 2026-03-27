@@ -7,7 +7,7 @@ import threading
 import atexit
 import time
 import numpy as np
-from settings import app
+from settings import app, settings, transport_bus
 from api.schemas.webcam import WebcamStatusResponse, WebcamQualityResponse, WebcamQualityRequest
 
 router = APIRouter(prefix="/api/webcam", tags=["Webcam"])
@@ -57,8 +57,22 @@ def calculate_adaptive_quality(network_delay):
         quality = video_quality["max_quality"] - ratio * (video_quality["max_quality"] - video_quality["min_quality"])
         return max(video_quality["min_quality"], min(video_quality["max_quality"], int(quality)))
 
+def _inject_virtual_frame(frame_bytes: bytes):
+    global current_frame_bytes, last_frame_time
+    with frame_lock:
+        current_frame_bytes = frame_bytes
+        last_frame_time = time.time()
+
 def capture_frames():
     global current_frame, stop_capture, current_frame_bytes, last_frame_time
+    
+    vl_in_bus = transport_bus.get("virtual_link") is not None
+    is_virtual = vl_in_bus and settings.get("transport", {}).get("virtual_link", {}).get("virtual_camera", False)
+    if is_virtual:
+        while not stop_capture:
+            time.sleep(1.0)
+        return
+        
     cap = cv2.VideoCapture(0)
     
     cap.set(cv2.CAP_PROP_FPS, video_quality["fps"])
@@ -196,6 +210,12 @@ def restart_webcam_capture():
 
 start_webcam_capture()
 atexit.register(stop_webcam_capture)
+
+is_virtual_camera = settings.get("transport", {}).get("virtual_link", {}).get("virtual_camera", False)
+if is_virtual_camera:
+    vl = transport_bus.get("virtual_link")
+    if vl and hasattr(vl, 'on_frame_callback'):
+        vl.on_frame_callback = _inject_virtual_frame
 
 @router.get("/stream", 
     summary="Получить видеопоток с камеры", 

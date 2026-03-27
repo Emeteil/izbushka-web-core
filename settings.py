@@ -15,11 +15,11 @@ from com_link_rt import (
     ComLinkConnection,
     PingCommand,
     DistanceCommand,
-    # GyroCommand,
     MillisCommand,
     MotorsCommand,
     ServoCommand
 )
+from transport import TransportBus, ComLinkSubscriber, VirtualLinkSubscriber, ConsoleLoggerSubscriber
 
 with open("settings.yml", "r", encoding="utf-8") as f:
     settings = yaml.load(f, Loader=yaml.FullLoader)
@@ -41,7 +41,6 @@ try:
 
         com_link_commands['ping'] = PingCommand(com_link_connection)
         com_link_commands['distance'] = DistanceCommand(com_link_connection)
-        # com_link_commands['gyro'] = GyroCommand(com_link_connection)
         com_link_commands['millis'] = MillisCommand(com_link_connection)
         com_link_commands['motors'] = MotorsCommand(com_link_connection)
         com_link_commands['servo'] = ServoCommand(com_link_connection)
@@ -53,6 +52,33 @@ try:
 except Exception as e:
     print(f"Failed to initialize ComLink RT: {e}")
     com_link_connection = None
+
+transport_cfg = settings.get("transport", {})
+transport_bus = TransportBus()
+has_com_link = False
+
+if com_link_connection and com_link_commands:
+    cl_cfg = transport_cfg.get("com_link_rt", {})
+    if cl_cfg.get("enabled", True):
+        transport_bus.add(ComLinkSubscriber(com_link_commands))
+        has_com_link = True
+
+if not has_com_link:
+    print("ComLink RT unavailable, using virtual link as fallback")
+    vl_cfg = transport_cfg.get("virtual_link", {})
+    if vl_cfg.get("enabled", False):
+        transport_bus.add(VirtualLinkSubscriber(
+            host=vl_cfg.get("host", "127.0.0.1"),
+            port=vl_cfg.get("port", 5470),
+        ))
+
+log_cfg = transport_cfg.get("console_logger", {})
+if log_cfg.get("enabled", False):
+    transport_bus.add(ConsoleLoggerSubscriber(
+        log_level=log_cfg.get("log_level", "INFO"),
+    ))
+
+print(f"Transport bus: {[s['name'] for s in transport_bus.status()]}")
 
 app = FastAPI(
     debug=settings.get('debug', False),
