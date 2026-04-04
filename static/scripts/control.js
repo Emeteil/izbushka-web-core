@@ -18,15 +18,24 @@ const joystickManager = nipplejs.create({
     size: 150
 });
 
-const SEND_INTERVAL_MS = 230;
-const DEAD_ZONE = 0.3;
-const MIN_SPEED = 100;
-const MAX_SPEED = 255;
+const ACTION_INTERVAL_MS = 17;
+const SPEED_INTERVAL_MS = 230;
+const SPEED_CRITICAL_INTERVAL_MS = 50;
+const SPEED_ZONES = 4;
+const STOP_RETRY_MS = 100;
+const DEAD_ZONE = 0;
+const MIN_SPEED = 25;
+const MAX_SPEED = 200;
 
 let lastSentAction = null;
 let lastSentSpeed = null;
-let sendTimer = null;
-let pendingCommand = null;
+let actionThrottleTimer = null;
+let speedThrottleTimer = null;
+let speedCriticalThrottleTimer = null;
+let stopRetryTimer = null;
+let lastActionSendTime = 0;
+let lastSpeedSendTime = 0;
+let lastCriticalSpeedSendTime = 0;
 
 function angleToAction(angle) {
     if (angle >= 45 && angle < 135) return 'move_forward';
@@ -41,6 +50,11 @@ function forceToSpeed(force) {
     return Math.round(MIN_SPEED + ratio * (MAX_SPEED - MIN_SPEED));
 }
 
+function getSpeedZone(speed) {
+    const zoneSize = (MAX_SPEED - MIN_SPEED) / SPEED_ZONES;
+    return Math.min(Math.floor((speed - MIN_SPEED) / zoneSize), SPEED_ZONES - 1);
+}
+
 function sendCommand(action, speed) {
     socket.emit('robot.motors', {
         action: action,
@@ -51,28 +65,99 @@ function sendCommand(action, speed) {
     lastSentSpeed = speed;
 }
 
-function scheduleSend(action, speed) {
-    pendingCommand = { action, speed };
-
-    if (sendTimer) return;
-
-    flushPending();
-    sendTimer = setTimeout(() => {
-        sendTimer = null;
-        if (pendingCommand) flushPending();
-    }, SEND_INTERVAL_MS);
+function cancelStopRetry() {
+    if (stopRetryTimer) {
+        clearTimeout(stopRetryTimer);
+        stopRetryTimer = null;
+    }
 }
 
-function flushPending() {
-    if (!pendingCommand) return;
-    const { action, speed } = pendingCommand;
-    pendingCommand = null;
+function scheduleStopRetry() {
+    cancelStopRetry();
+    stopRetryTimer = setTimeout(() => {
+        stopRetryTimer = null;
+        sendCommand('stop', 0);
+    }, STOP_RETRY_MS);
+}
 
-    if (action === lastSentAction && speed === lastSentSpeed) return;
+function scheduleSend(action, speed) {
+    const now = Date.now();
+    const actionChanged = action !== lastSentAction;
+    const speedChanged = speed !== lastSentSpeed;
 
-    sendCommand(action, speed);
-    updateStatus(`MOVING: ${action.toUpperCase()}`);
-    document.getElementById('speed-val').textContent = speed;
+    if (!actionChanged && !speedChanged) return;
+
+    cancelStopRetry();
+
+    if (actionChanged) {
+        const elapsed = now - lastActionSendTime;
+        if (elapsed >= ACTION_INTERVAL_MS) {
+            sendCommand(action, speed);
+            lastActionSendTime = now;
+            lastSpeedSendTime = now;
+            updateStatus(`MOVING: ${action.toUpperCase()}`);
+            document.getElementById('speed-val').textContent = speed;
+
+            if (actionThrottleTimer) { clearTimeout(actionThrottleTimer); actionThrottleTimer = null; }
+            if (speedThrottleTimer) { clearTimeout(speedThrottleTimer); speedThrottleTimer = null; }
+        } else if (!actionThrottleTimer) {
+            actionThrottleTimer = setTimeout(() => {
+                actionThrottleTimer = null;
+                if (action !== lastSentAction || speed !== lastSentSpeed) {
+                    sendCommand(action, speed);
+                    lastActionSendTime = Date.now();
+                    lastSpeedSendTime = Date.now();
+                    updateStatus(`MOVING: ${action.toUpperCase()}`);
+                    document.getElementById('speed-val').textContent = speed;
+                }
+            }, ACTION_INTERVAL_MS - elapsed);
+        }
+    } else if (speedChanged) {
+        const prevZone = getSpeedZone(lastSentSpeed ?? MIN_SPEED);
+        const newZone = getSpeedZone(speed);
+        const isCritical = newZone !== prevZone;
+
+        if (isCritical) {
+            const elapsed = now - lastCriticalSpeedSendTime;
+            if (elapsed >= SPEED_CRITICAL_INTERVAL_MS) {
+                sendCommand(action, speed);
+                lastCriticalSpeedSendTime = now;
+                lastSpeedSendTime = now;
+                document.getElementById('speed-val').textContent = speed;
+
+                if (speedCriticalThrottleTimer) { clearTimeout(speedCriticalThrottleTimer); speedCriticalThrottleTimer = null; }
+                if (speedThrottleTimer) { clearTimeout(speedThrottleTimer); speedThrottleTimer = null; }
+            } else if (!speedCriticalThrottleTimer) {
+                speedCriticalThrottleTimer = setTimeout(() => {
+                    speedCriticalThrottleTimer = null;
+                    if (speed !== lastSentSpeed) {
+                        sendCommand(action, speed);
+                        lastCriticalSpeedSendTime = Date.now();
+                        lastSpeedSendTime = Date.now();
+                        document.getElementById('speed-val').textContent = speed;
+                    }
+                }, SPEED_CRITICAL_INTERVAL_MS - elapsed);
+            }
+        } else {
+            const elapsed = now - lastSpeedSendTime;
+            if (elapsed >= SPEED_INTERVAL_MS) {
+                sendCommand(action, speed);
+                lastSpeedSendTime = now;
+                document.getElementById('speed-val').textContent = speed;
+
+                if (speedThrottleTimer) { clearTimeout(speedThrottleTimer); speedThrottleTimer = null; }
+            } else if (!speedThrottleTimer) {
+                speedThrottleTimer = setTimeout(() => {
+                    speedThrottleTimer = null;
+                    if (speed !== lastSentSpeed) {
+                        sendCommand(action, speed);
+                        lastSpeedSendTime = Date.now();
+                        document.getElementById('speed-val').textContent = speed;
+                    }
+                }, SPEED_INTERVAL_MS - elapsed);
+            }
+        }
+    }
 }
 
 joystickManager.on('move', function (_evt, data) {
@@ -86,10 +171,15 @@ joystickManager.on('move', function (_evt, data) {
 });
 
 joystickManager.on('end', function () {
-    pendingCommand = null;
-    if (sendTimer) { clearTimeout(sendTimer); sendTimer = null; }
+    if (actionThrottleTimer) { clearTimeout(actionThrottleTimer); actionThrottleTimer = null; }
+    if (speedThrottleTimer) { clearTimeout(speedThrottleTimer); speedThrottleTimer = null; }
+    if (speedCriticalThrottleTimer) { clearTimeout(speedCriticalThrottleTimer); speedCriticalThrottleTimer = null; }
 
-    sendCommand('stop', 0);
+    if (lastSentAction !== 'stop') {
+        sendCommand('stop', 0);
+        scheduleStopRetry();
+    }
+
     document.getElementById('speed-val').textContent = 0;
     updateStatus('SYSTEM IDLE');
 });
@@ -132,7 +222,7 @@ socket.on('sensor.data', (data) => {
     }
     if (data.gyro) {
         document.getElementById('sensor-temp').textContent = data.gyro.temperature + '°C';
-        document.getElementById('sensor-gyro').textContent = `X:${data.gyro.gyro[0]}`;
+        document.getElementById('sensor-gyro').textContent = `Y:${data.gyro.gyro[1]}`;
     }
 });
 
