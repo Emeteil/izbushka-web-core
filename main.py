@@ -15,6 +15,7 @@ import api.websockets
 import api.authorization
 import api.com_link_rt_api
 import api.webcam_api
+import api.voice_link
 from utils.connection_manager import manager
 from settings import com_link_connection, com_link_commands, transport_bus
 import asyncio
