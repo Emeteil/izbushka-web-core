@@ -97,7 +97,7 @@ if "cors" in settings:
     )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory="templates", auto_reload=True)
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter

@@ -327,6 +327,57 @@ async function initStream() {
 document.getElementById('btn-turret-left').addEventListener('click', () => rotateTurret('left'));
 document.getElementById('btn-turret-right').addEventListener('click', () => rotateTurret('right'));
 
+const voiceChannel = new VoiceChannel({ token });
+const micBtn = document.getElementById('btn-voice-mic');
+const speakerBtn = document.getElementById('btn-voice-speaker');
+
+function syncVoiceButtons() {
+    micBtn.classList.toggle('active', voiceChannel.micEnabled);
+    micBtn.setAttribute('aria-pressed', String(voiceChannel.micEnabled));
+    speakerBtn.classList.toggle('active', voiceChannel.speakerEnabled);
+    speakerBtn.setAttribute('aria-pressed', String(voiceChannel.speakerEnabled));
+}
+
+voiceChannel.onStatusChange = syncVoiceButtons;
+
+micBtn.addEventListener('click', async () => {
+    micBtn.disabled = true;
+    try {
+        if (voiceChannel.micEnabled) {
+            await voiceChannel.setMic(false);
+        } else {
+            if (!voiceChannel.speakerEnabled) await voiceChannel.setSpeaker(true);
+            await voiceChannel.setMic(true);
+        }
+        updateStatus(`MIC: ${voiceChannel.micEnabled ? 'ON' : 'OFF'}`);
+    } catch (err) {
+        console.error('Mic toggle failed:', err);
+        updateStatus('MIC ERROR');
+    } finally {
+        micBtn.disabled = false;
+        syncVoiceButtons();
+    }
+});
+
+speakerBtn.addEventListener('click', async () => {
+    speakerBtn.disabled = true;
+    try {
+        if (voiceChannel.speakerEnabled) {
+            if (voiceChannel.micEnabled) await voiceChannel.setMic(false);
+            await voiceChannel.setSpeaker(false);
+        } else {
+            await voiceChannel.setSpeaker(true);
+        }
+        updateStatus(`SPK: ${voiceChannel.speakerEnabled ? 'ON' : 'OFF'}`);
+    } catch (err) {
+        console.error('Speaker toggle failed:', err);
+        updateStatus('SPK ERROR');
+    } finally {
+        speakerBtn.disabled = false;
+        syncVoiceButtons();
+    }
+});
+
 async function loadEmotions() {
     try {
         const response = await fetch('/api/emotions', {

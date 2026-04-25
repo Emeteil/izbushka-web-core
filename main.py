@@ -16,6 +16,7 @@ import api.authorization
 import api.com_link_rt_api
 import api.webcam_api
 import api.voice_link
+import api.voice_broadcast
 from utils.connection_manager import manager
 from settings import com_link_connection, com_link_commands, transport_bus
 import asyncio

@@ -7,6 +7,7 @@
     <script src="{{ url_for('static', path='scripts/socketio_mock.js') }}"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
     <link rel="stylesheet" href="{{ url_for('static', path='styles/control.css') }}">
+    <script src="{{ url_for('static', path='scripts/voice.js') }}"></script>
     <script src="{{ url_for('static', path='scripts/control.js') }}" defer></script>
 </head>
 
@@ -82,6 +83,18 @@
                     <div class="turret-controls">
                         <button id="btn-turret-left" class="btn btn-turret">↺</button>
                         <button id="btn-turret-right" class="btn btn-turret">↻</button>
+                    </div>
+                </div>
+
+                <div class="voice-wrapper">
+                    <div class="label-mini">BROADCAST VOICE CHANNEL</div>
+                    <div class="voice-controls">
+                        <button id="btn-voice-mic" class="btn btn-voice" type="button" aria-pressed="false" title="Microphone">
+                            <span class="voice-icon">🎤</span><span class="voice-label">MIC</span>
+                        </button>
+                        <button id="btn-voice-speaker" class="btn btn-voice" type="button" aria-pressed="false" title="Speaker">
+                            <span class="voice-icon">🔊</span><span class="voice-label">SPK</span>
+                        </button>
                     </div>
                 </div>
 

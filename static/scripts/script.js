@@ -7,7 +7,7 @@ class RobotEmotions {
         this.leftEyebrow = document.querySelector('.left-eyebrow');
         this.rightEyebrow = document.querySelector('.right-eyebrow');
         this.pupils = document.querySelectorAll('.pupil');
-        
+
         this.socket = null;
         this.shakeInterval = null;
         this.currentEmotion = 'neutral';
@@ -43,32 +43,36 @@ class RobotEmotions {
 
     initWebSocket() {
         const options = {};
-        
+
         if (this.token) {
             options.query = { token: this.token };
         }
-        
+
         this.socket = io(options);
-        
+
         this.socket.on('connect', () => {
             console.log('Connected to WebSocket server');
         });
-        
+
         this.socket.on('system.emotion_changed', (data) => {
             console.log('Emotion changed via WebSocket:', data.emotion);
             this.setEmotion(data.emotion);
         });
-        
+
         this.socket.on('emotion.current', (data) => {
             console.log('Current emotion:', data.emotion);
             this.setEmotion(data.emotion);
         });
-        
+
+        this.socket.on('message', (data) => {
+            console.log('Message:', data);
+        });
+
         this.socket.on('error', (data) => {
             console.error('WebSocket error:', data.message);
             alert('Ошибка: ' + data.message);
         });
-        
+
         this.socket.on('disconnect', () => {
             console.log('Disconnected from WebSocket server');
         });
@@ -78,11 +82,11 @@ class RobotEmotions {
         const headers = {
             'Content-Type': 'application/json'
         };
-        
+
         if (this.token) {
             headers['Authorization'] = `Bearer ${this.token}`;
         }
-        
+
         return headers;
     }
 
@@ -100,18 +104,18 @@ class RobotEmotions {
             headers: this.getAuthHeaders(),
             body: JSON.stringify({ emotion: emotion })
         })
-        .then(response => response.json())
-        .then(data => {
-            if (data.status === 'success') {
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    this.setEmotion(emotion);
+                } else {
+                    console.error('Error setting emotion:', data);
+                }
+            })
+            .catch(error => {
+                console.error('HTTP request failed:', error);
                 this.setEmotion(emotion);
-            } else {
-                console.error('Error setting emotion:', data);
-            }
-        })
-        .catch(error => {
-            console.error('HTTP request failed:', error);
-            this.setEmotion(emotion);
-        });
+            });
     }
 
     happyEffect() {
@@ -280,7 +284,39 @@ function startDemoMode() {
 }
 
 let robot;
+let voiceChannel;
+
+async function startVoiceChannel() {
+    if (!voiceChannel || (voiceChannel.micEnabled && voiceChannel.speakerEnabled)) return;
+    try {
+        await voiceChannel.setSpeaker(true);
+        await voiceChannel.setMic(true);
+    } catch (err) {
+        console.warn('Voice auto-start blocked, awaiting user gesture:', err);
+    }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     robot = new RobotEmotions();
     window.robot = robot;
+
+    if (window.VoiceChannel) {
+        voiceChannel = new VoiceChannel();
+        window.voiceChannel = voiceChannel;
+
+        startVoiceChannel();
+
+        const resumeOnGesture = () => {
+            if (voiceChannel.micEnabled && voiceChannel.speakerEnabled) {
+                document.removeEventListener('click', resumeOnGesture);
+                document.removeEventListener('keydown', resumeOnGesture);
+                document.removeEventListener('touchstart', resumeOnGesture);
+                return;
+            }
+            startVoiceChannel();
+        };
+        document.addEventListener('click', resumeOnGesture);
+        document.addEventListener('keydown', resumeOnGesture);
+        document.addEventListener('touchstart', resumeOnGesture);
+    }
 });
