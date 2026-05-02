@@ -37,33 +37,7 @@ user_data_settings:
     email: "[^@]+@[^@]+\\.[^@]+"
     special_chars: "[!@#$%^&*(),.?:{}|<>]"
 
-emotions:
-  ids: ['happy', 'sad', 'angry', 'surprised', 'neutral', 'wink', 'aggressive', 'confused']
-  items:
-    - id: happy
-      name: "HAPPY"
-      emoji: "😊"
-    - id: sad
-      name: "SAD"
-      emoji: "😢"
-    - id: angry
-      name: "ANGRY"
-      emoji: "😠"
-    - id: surprised
-      name: "SURPRISED"
-      emoji: "😯"
-    - id: neutral
-      name: "NEUTRAL"
-      emoji: "😐"
-    - id: wink
-      name: "WINK"
-      emoji: "😉"
-    - id: aggressive
-      name: "AGGRESSIVE"
-      emoji: "😡"
-    - id: confused
-      name: "CONFUSED"
-      emoji: "😕"
+emotions_config_path: "emotions.yml"
 
 load_dotenv: true
 debug: false

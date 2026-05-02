@@ -1,4 +1,3 @@
-from datetime import datetime
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -9,7 +8,6 @@ from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 import secrets
 import yaml, os
-import logging
 
 from com_link_rt import (
     ComLinkConnection,
@@ -19,7 +17,8 @@ from com_link_rt import (
     MotorsCommand,
     ServoCommand
 )
-from transport import TransportBus, ComLinkSubscriber, VirtualLinkSubscriber, ConsoleLoggerSubscriber
+from transport import TransportBus, TransportRegistry
+import transport.subscribers
 
 with open("settings.yml", "r", encoding="utf-8") as f:
     settings = yaml.load(f, Loader=yaml.FullLoader)
@@ -53,32 +52,39 @@ except Exception as e:
     print(f"Failed to initialize ComLink RT: {e}")
     com_link_connection = None
 
-transport_cfg = settings.get("transport", {})
-transport_bus = TransportBus()
-has_com_link = False
+def _build_transport_bus(transport_cfg: dict) -> TransportBus:
+    bus = TransportBus()
 
-if com_link_connection and com_link_commands:
     cl_cfg = transport_cfg.get("com_link_rt", {})
-    if cl_cfg.get("enabled", True):
-        transport_bus.add(ComLinkSubscriber(com_link_commands))
-        has_com_link = True
+    if com_link_connection and com_link_commands and cl_cfg.get("enabled", True):
+        bus.add(TransportRegistry.build("com_link_rt", {**cl_cfg, "commands": com_link_commands}))
+    else:
+        vl_cfg = transport_cfg.get("virtual_link", {})
+        if vl_cfg.get("enabled", False):
+            print("ComLink RT unavailable, using virtual link as fallback")
+            bus.add(TransportRegistry.build("virtual_link", vl_cfg))
 
-if not has_com_link:
-    print("ComLink RT unavailable, using virtual link as fallback")
-    vl_cfg = transport_cfg.get("virtual_link", {})
-    if vl_cfg.get("enabled", False):
-        transport_bus.add(VirtualLinkSubscriber(
-            host=vl_cfg.get("host", "127.0.0.1"),
-            port=vl_cfg.get("port", 5470),
-        ))
+    log_cfg = transport_cfg.get("console_logger", {})
+    if log_cfg.get("enabled", False):
+        bus.add(TransportRegistry.build("console_logger", log_cfg))
 
-log_cfg = transport_cfg.get("console_logger", {})
-if log_cfg.get("enabled", False):
-    transport_bus.add(ConsoleLoggerSubscriber(
-        log_level=log_cfg.get("log_level", "INFO"),
-    ))
+    return bus
 
+
+transport_bus = _build_transport_bus(settings.get("transport", {}))
 print(f"Transport bus: {[s['name'] for s in transport_bus.status()]}")
+
+from services import SensorService, HealthService, EmotionRegistry
+import time as _time
+sensor_service = SensorService(transport_bus, com_link_commands)
+emotion_registry = EmotionRegistry.from_yaml(settings.get("emotions_config_path", "emotions.yml"))
+health_service = HealthService(
+    transport_bus=transport_bus,
+    sensor_service=sensor_service,
+    com_link_connection=com_link_connection,
+    com_link_port=settings.get("com_link_rt_port"),
+    started_at=_time.time(),
+)
 
 app = FastAPI(
     debug=settings.get('debug', False),
@@ -103,27 +109,15 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-log_dir = settings.get("logging", {}).get("log_dir", "logs")
-os.makedirs(log_dir, exist_ok=True)
-log_format = "%(asctime)s - %(levelname)s - %(name)s - %(message)s"
-formatter = logging.Formatter(log_format)
-log_level = logging.INFO if not settings.get("debug") else logging.DEBUG
-log_filename = datetime.now().strftime("%Y-%m-%d_%H-%M-%S.log")
-log_filepath = os.path.join(log_dir, log_filename)
+from utils.logging_setup import setup_logging
 
-logger = logging.getLogger("fastapi")
-logger.setLevel(log_level)
-file_handler = logging.FileHandler(log_filepath)
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-uvicorn_logger = logging.getLogger("uvicorn")
-uvicorn_logger.setLevel(log_level)
-uvicorn_file_handler = logging.FileHandler(log_filepath)
-uvicorn_file_handler.setFormatter(formatter)
-uvicorn_logger.addHandler(uvicorn_file_handler)
+logging_cfg = settings.get("logging", {})
+log_filepath = setup_logging(
+    log_dir=logging_cfg.get("log_dir", "logs"),
+    debug=settings.get("debug", False),
+    json_format=logging_cfg.get("json_format", False),
+)
 
 settings["SECRET_KEY"] = settings.get("flask_secret", secrets.token_urlsafe(32))
 settings["MASTER_TOKEN"] = os.environ.get("MASTER_TOKEN", secrets.token_urlsafe(32))
 
-current_emotion = "neutral"

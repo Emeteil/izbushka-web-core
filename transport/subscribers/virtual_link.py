@@ -1,4 +1,5 @@
 from transport.base import BaseSubscriber
+from transport.registry import TransportRegistry
 from typing import Any, Optional, Callable
 import socket
 import json
@@ -12,8 +13,8 @@ logger = logging.getLogger("transport.virtual_link")
 HEADER_SIZE = 4
 
 class VirtualLinkSubscriber(BaseSubscriber):
-    def __init__(self, host: str = "127.0.0.1", port: int = 5470, timeout: float = 2.0):
-        super().__init__("virtual_link")
+    def __init__(self, host: str = "127.0.0.1", port: int = 5470, timeout: float = 2.0, priority: int = 50):
+        super().__init__("virtual_link", priority=priority)
         self._host = str(host)
         self._port = int(port)
         self._timeout = timeout
@@ -230,3 +231,13 @@ class VirtualLinkSubscriber(BaseSubscriber):
         if isinstance(obj, bytes):
             return list(obj)
         return obj
+
+
+@TransportRegistry.factory("virtual_link")
+def _build_virtual_link(config: dict) -> VirtualLinkSubscriber:
+    return VirtualLinkSubscriber(
+        host=config.get("host", "127.0.0.1"),
+        port=config.get("port", 5470),
+        timeout=config.get("timeout", 2.0),
+        priority=config.get("priority", 50),
+    )

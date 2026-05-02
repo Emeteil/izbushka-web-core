@@ -4,9 +4,34 @@ import uvicorn
 import webbrowser
 import threading
 import time
+import logging
 
 from settings import app, settings, templates
 from authorization import is_logged
+from utils.tracing import trace_scope, get_trace_id
+
+_request_logger = logging.getLogger("http")
+
+
+@app.middleware("http")
+async def trace_id_middleware(request: Request, call_next):
+    incoming = request.headers.get("X-Trace-Id")
+    started = time.perf_counter()
+    with trace_scope(incoming):
+        response = await call_next(request)
+        latency_ms = round((time.perf_counter() - started) * 1000, 3)
+        trace_id = get_trace_id() or "-"
+        response.headers["X-Trace-Id"] = trace_id
+        _request_logger.info(
+            "http.request",
+            extra={
+                "method": request.method,
+                "path": request.url.path,
+                "status": response.status_code,
+                "latency_ms": latency_ms,
+            },
+        )
+        return response
 
 import api.admin
 import events

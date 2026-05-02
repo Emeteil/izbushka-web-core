@@ -1,183 +1,149 @@
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from utils.connection_manager import manager
+from utils.tracing import trace_scope
 from authorization import get_current_user_ws
-from settings import app, settings, com_link_connection, com_link_commands, transport_bus
-import settings as g_settings
+from settings import app, settings, com_link_connection, transport_bus, sensor_service, emotion_registry
+from services.emotion_registry import EmotionNotFoundError
 import json
 
 router = APIRouter(tags=["Websockets"])
+
+def _connection_state() -> dict:
+    is_hardware = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
+    vl = transport_bus.get("virtual_link")
+    is_virtual = vl is not None and vl.enabled and getattr(vl, "is_connected", False)
+    return {
+        "connected": is_hardware or is_virtual,
+        "port": settings.get("com_link_rt_port"),
+        "transport": transport_bus.status(),
+    }
+
+async def _send_error(ws: WebSocket, message: str) -> None:
+    await ws.send_json({"event": "system.error", "data": {"message": message}})
+
+async def _handle_emotion(ws: WebSocket, action: str, payload: dict, user_id: str) -> None:
+    if action == "get":
+        await ws.send_json({"event": "emotion.current", "data": {"emotion": emotion_registry.current}})
+        return
+    try:
+        emotion_registry.set_current(payload.get("emotion"))
+    except EmotionNotFoundError:
+        await _send_error(ws, "Invalid emotion")
+        return
+    await manager.broadcast({
+        "event": "system.emotion_changed",
+        "data": {"emotion": emotion_registry.current, "source": "websocket", "client_id": user_id},
+    })
+
+async def _handle_sensor_request(ws: WebSocket) -> None:
+    if not transport_bus.has_active():
+        await ws.send_json({"event": "sensor.data", "data": {}})
+        return
+    await ws.send_json({"event": "sensor.data", "data": sensor_service.get_all()})
+
+MOTORS_ACTIONS = {
+    "set_speed":     ("set_speed",     ("motor_mask", "speed_left", "speed_right")),
+    "move_forward":  ("move_forward",  ("speed",)),
+    "move_backward": ("move_backward", ("speed",)),
+    "turn_left":     ("turn_left",     ("speed",)),
+    "turn_right":    ("turn_right",    ("speed",)),
+    "stop":          ("stop_all",      ()),
+    "brake":         ("brake",         ()),
+}
+
+MOTOR_DEFAULTS = {"motor_mask": 0x03, "speed_left": 0, "speed_right": 0, "speed": 150}
+
+SERVO_ACTIONS = {
+    "move_immediate":   ("move_immediate",   {"channel": 0, "angle": 90}),
+    "move_smooth":      ("move_smooth_high", {"channel": 0, "angle": 90, "step_delay_ms": 50}),
+}
+
+def _kwargs_for(payload: dict, keys, defaults: dict) -> dict:
+    return {k: payload.get(k, defaults.get(k)) for k in keys}
+
+async def _execute_motors(ws: WebSocket, action: str, payload: dict, wait_response: bool) -> None:
+    mapping = MOTORS_ACTIONS.get(action)
+    if mapping is None:
+        await _send_error(ws, f"Unknown motors action: {action}")
+        return
+    bus_action, keys = mapping
+    kwargs = _kwargs_for(payload, keys, MOTOR_DEFAULTS)
+    kwargs["wait_response"] = wait_response
+    success = transport_bus.execute("motors", bus_action, **kwargs)
+    if wait_response:
+        await ws.send_json({"event": "command.result", "data": {"target": "motors", "action": action, "success": success}})
+
+async def _execute_servo(ws: WebSocket, action: str, payload: dict, wait_response: bool) -> None:
+    mapping = SERVO_ACTIONS.get(action)
+    if mapping is None:
+        await _send_error(ws, f"Unknown servo action: {action}")
+        return
+    bus_action, defaults = mapping
+    kwargs = {k: payload.get(k, v) for k, v in defaults.items()}
+    if action == "move_smooth":
+        kwargs["step_delay_ms"] = payload.get("step_delay", defaults["step_delay_ms"])
+    kwargs["wait_response"] = wait_response
+    success = transport_bus.execute("servo", bus_action, **kwargs)
+    if wait_response:
+        await ws.send_json({"event": "command.result", "data": {"target": "servo", "action": action, "success": success}})
+
+async def _execute_ping(ws: WebSocket) -> None:
+    result = transport_bus.execute("ping", "execute")
+    await ws.send_json({"event": "command.result", "data": {"target": "ping", "success": result is not None}})
+
+async def _handle_robot(ws: WebSocket, target: str, payload: dict) -> None:
+    if not transport_bus.has_active():
+        await _send_error(ws, "No active transport subscribers")
+        return
+    action = payload.get("action")
+    wait_response = payload.get("wait_response", True)
+    try:
+        if target == "ping":
+            await _execute_ping(ws)
+        elif target == "motors":
+            await _execute_motors(ws, action, payload, wait_response)
+        elif target == "servo":
+            await _execute_servo(ws, action, payload, wait_response)
+        else:
+            await _send_error(ws, f"Unknown robot target: {target}")
+    except Exception as e:
+        await _send_error(ws, str(e))
+
+async def _dispatch(ws: WebSocket, event: str, payload: dict, user_id: str) -> None:
+    if event == "emotion.set":
+        await _handle_emotion(ws, "set", payload, user_id)
+    elif event == "emotion.get":
+        await _handle_emotion(ws, "get", payload, user_id)
+    elif event == "sensor.get_data":
+        await _handle_sensor_request(ws)
+    elif event and event.startswith("robot."):
+        await _handle_robot(ws, event.split(".", 1)[1], payload)
+    else:
+        await _send_error(ws, f"Unknown event namespace: {event}")
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     payload = await get_current_user_ws(websocket)
     if not payload:
         return
-        
+
     user_id = payload.get("user_id", "anonymous")
     await manager.connect(websocket, user_id)
-    
+
     try:
         await websocket.send_json({
             "event": "system.emotion_changed",
-            "data": {
-                "emotion": g_settings.current_emotion,
-                "source": "system"
-            }
+            "data": {"emotion": emotion_registry.current, "source": "system"},
         })
-        
-        is_hardware = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
-        vl = transport_bus.get("virtual_link")
-        is_virtual = vl is not None and vl.enabled and getattr(vl, 'is_connected', False)
-        connected = is_hardware or is_virtual
-        await websocket.send_json({
-            "event": "system.connection_status",
-            "data": {
-                "connected": connected,
-                "port": settings.get("com_link_rt_port"),
-                "transport": transport_bus.status()
-            }
-        })
+        await websocket.send_json({"event": "system.connection_status", "data": _connection_state()})
 
         while True:
-            text_data = await websocket.receive_text()
             try:
-                data = json.loads(text_data)
-                event = data.get("event")
-                payload_data = data.get("data", {})
-                
-                if event == "emotion.set":
-                    emotion = payload_data.get("emotion")
-                    valid_emotions = settings["emotions"]["ids"]
-                    if emotion in valid_emotions:
-                        g_settings.current_emotion = emotion
-                        await manager.broadcast({
-                            "event": "system.emotion_changed",
-                            "data": {
-                                "emotion": emotion,
-                                "source": "websocket",
-                                "client_id": user_id
-                            }
-                        })
-                    else:
-                        await websocket.send_json({"event": "system.error", "data": {"message": "Invalid emotion"}})
-                
-                elif event == "emotion.get":
-                    await websocket.send_json({"event": "emotion.current", "data": {"emotion": g_settings.current_emotion}})
-                
-                elif event == "sensor.get_data":
-                    sensor_resp = {}
-                    
-                    cmd_dist = com_link_commands.get('distance') if com_link_commands else None
-                    if cmd_dist and getattr(cmd_dist, 'is_subscribed', False) and getattr(cmd_dist, 'last_distance', None) is not None:
-                        sensor_resp['distance'] = {"distance_cm": cmd_dist.last_distance}
-                    elif transport_bus.has_active():
-                        dist = transport_bus.execute("distance", "execute")
-                        if dist is not None: sensor_resp['distance'] = {"distance_cm": dist}
-                        
-                    cmd_gyro = com_link_commands.get('gyro') if com_link_commands else None
-                    if cmd_gyro and getattr(cmd_gyro, 'is_subscribed', False) and getattr(cmd_gyro, 'last_data', None) is not None:
-                        sensor_resp['gyro'] = {
-                            "accel": cmd_gyro.get_acceleration(cmd_gyro.last_data),
-                            "gyro": cmd_gyro.get_rotation(cmd_gyro.last_data),
-                            "temperature": cmd_gyro.get_temperature(cmd_gyro.last_data)
-                        }
-                    elif transport_bus.has_active():
-                        gyro = transport_bus.execute("gyro", "execute")
-                        if gyro is not None: sensor_resp['gyro'] = gyro
-                        
-                    cmd_millis = com_link_commands.get('millis') if com_link_commands else None
-                    if cmd_millis and getattr(cmd_millis, 'is_subscribed', False) and getattr(cmd_millis, 'last_data', None) is not None:
-                        sensor_resp['millis'] = {"millis": cmd_millis.last_data}
-                    elif transport_bus.has_active():
-                        millis = transport_bus.execute("millis", "execute")
-                        if millis is not None: sensor_resp['millis'] = {"millis": millis}
-
-                    await websocket.send_json({"event": "sensor.data", "data": sensor_resp})
-                
-                elif event.startswith("robot."):
-                    if not transport_bus.has_active():
-                        await websocket.send_json({"event": "system.error", "data": {"message": "No active transport subscribers"}})
-                        continue
-                    
-                    target = event.split(".")[1]
-                    action = payload_data.get("action")
-                    wait_response = payload_data.get("wait_response", True)
-                    
-                    try:
-                        if target == "ping":
-                            result = transport_bus.execute("ping", "execute")
-                            await websocket.send_json({"event": "command.result", "data": {
-                                "target": "ping",
-                                "success": result is not None
-                            }})
-                        elif target == "motors":
-                            success = False
-                            if action == "set_speed":
-                                motor_mask = payload_data.get("motor_mask", 0x03)
-                                speed_left = payload_data.get("speed_left", 0)
-                                speed_right = payload_data.get("speed_right", 0)
-                                success = transport_bus.execute("motors", "set_speed",
-                                    motor_mask=motor_mask, speed_left=speed_left,
-                                    speed_right=speed_right, wait_response=wait_response)
-                            elif action == "move_forward":
-                                speed = payload_data.get("speed", 150)
-                                success = transport_bus.execute("motors", "move_forward",
-                                    speed=speed, wait_response=wait_response)
-                            elif action == "move_backward":
-                                speed = payload_data.get("speed", 150)
-                                success = transport_bus.execute("motors", "move_backward",
-                                    speed=speed, wait_response=wait_response)
-                            elif action == "turn_left":
-                                speed = payload_data.get("speed", 150)
-                                success = transport_bus.execute("motors", "turn_left",
-                                    speed=speed, wait_response=wait_response)
-                            elif action == "turn_right":
-                                speed = payload_data.get("speed", 150)
-                                success = transport_bus.execute("motors", "turn_right",
-                                    speed=speed, wait_response=wait_response)
-                            elif action == "stop":
-                                success = transport_bus.execute("motors", "stop_all",
-                                    wait_response=wait_response)
-                            elif action == "brake":
-                                success = transport_bus.execute("motors", "brake",
-                                    wait_response=wait_response)
-
-                            if wait_response:
-                                await websocket.send_json({"event": "command.result", "data": {
-                                    "target": "motors",
-                                    "action": action,
-                                    "success": success
-                                }})
-                        elif target == "servo":
-                            success = False
-                            if action == "move_immediate":
-                                channel = payload_data.get("channel", 0)
-                                angle = payload_data.get("angle", 90)
-                                success = transport_bus.execute("servo", "move_immediate",
-                                    channel=channel, angle=angle, wait_response=wait_response)
-                            elif action == "move_smooth":
-                                channel = payload_data.get("channel", 0)
-                                angle = payload_data.get("angle", 90)
-                                step_delay = payload_data.get("step_delay", 50)
-                                success = transport_bus.execute("servo", "move_smooth_high",
-                                    channel=channel, angle=angle, step_delay_ms=step_delay,
-                                    wait_response=wait_response)
-
-                            if wait_response:
-                                await websocket.send_json({"event": "command.result", "data": {
-                                    "target": "servo",
-                                    "action": action,
-                                    "success": success
-                                }})
-                        else:
-                            await websocket.send_json({"event": "system.error", "data": {"message": f"Unknown robot target: {target}"}})
-                    except Exception as e:
-                        await websocket.send_json({"event": "system.error", "data": {"message": str(e)}})
-                else:
-                    await websocket.send_json({"event": "system.error", "data": {"message": f"Unknown event namespace: {event}"}})
+                data = json.loads(await websocket.receive_text())
             except json.JSONDecodeError:
-                pass
-                
+                continue
+            with trace_scope():
+                await _dispatch(websocket, data.get("event"), data.get("data", {}), user_id)
     except WebSocketDisconnect:
         manager.disconnect(websocket, user_id)
 

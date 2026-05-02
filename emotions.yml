@@ -1,0 +1,27 @@
+default: neutral
+
+items:
+  - id: happy
+    name: HAPPY
+    emoji: "😊"
+  - id: sad
+    name: SAD
+    emoji: "😢"
+  - id: angry
+    name: ANGRY
+    emoji: "😠"
+  - id: surprised
+    name: SURPRISED
+    emoji: "😯"
+  - id: neutral
+    name: NEUTRAL
+    emoji: "😐"
+  - id: wink
+    name: WINK
+    emoji: "😉"
+  - id: aggressive
+    name: AGGRESSIVE
+    emoji: "😡"
+  - id: confused
+    name: CONFUSED
+    emoji: "😕"
