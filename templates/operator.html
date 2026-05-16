@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Operator Console // ROBOT</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/nipplejs/0.10.1/nipplejs.min.js"></script>
+    <link rel="stylesheet" href="{{ url_for('static', path='styles/operator.css') }}">
+    <script src="{{ url_for('static', path='scripts/voice.js') }}"></script>
+    <script src="{{ url_for('static', path='scripts/operator.js') }}" defer></script>
+</head>
+
+<body>
+    <header class="topbar">
+        <div class="brand">
+            <span class="brand-mark">ROBOT</span>
+            <span class="brand-sub">OPERATOR CONSOLE</span>
+        </div>
+        <div class="topbar-stats">
+            <div class="stat">
+                <span class="stat-label">UPLINK</span>
+                <span class="dot" id="dot-uplink"></span>
+                <span class="stat-value" id="val-uplink">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">ROBOT</span>
+                <span class="dot" id="dot-robot"></span>
+                <span class="stat-value" id="val-robot">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">VOICE</span>
+                <span class="dot" id="dot-voice"></span>
+                <span class="stat-value" id="val-voice">—</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">DISTANCE</span>
+                <span class="stat-value" id="val-distance">— см</span>
+            </div>
+            <div class="stat">
+                <span class="stat-label">EMOTION</span>
+                <span class="stat-value" id="val-emotion">—</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="grid">
+        <section class="panel panel-video">
+            <div class="panel-head">
+                <h2>Камера робота</h2>
+                <div class="distance-bar">
+                    <div class="distance-bar-fill" id="distance-fill"></div>
+                    <span class="distance-bar-label" id="distance-label">— см</span>
+                </div>
+            </div>
+            <div class="video-wrap">
+                <img id="video" alt="NO SIGNAL">
+                <div class="video-status" id="video-status">Подключение к видеопотоку…</div>
+            </div>
+            <div class="video-actions">
+                <button class="btn ghost" id="btn-reload-video">Перезапустить поток</button>
+                <span class="hint">Камера также используется голосовым ассистентом</span>
+            </div>
+        </section>
+
+        <section class="panel panel-control">
+            <div class="panel-head">
+                <h2>Ручное управление</h2>
+                <span class="hint">Зажми джойстик / WASD</span>
+            </div>
+            <div class="joystick-area">
+                <div id="joystick"></div>
+            </div>
+            <div class="speed-display">
+                <div class="speed-row">
+                    <span>Действие:</span><span id="cur-action">IDLE</span>
+                </div>
+                <div class="speed-row">
+                    <span>Скорость:</span><span id="cur-speed">0</span>
+                </div>
+            </div>
+            <div class="quick-actions">
+                <button class="btn" data-motor="move_forward">▲ Вперёд</button>
+                <button class="btn" data-motor="turn_left">◀ Влево</button>
+                <button class="btn danger" data-motor="stop">■ СТОП</button>
+                <button class="btn" data-motor="turn_right">▶ Вправо</button>
+                <button class="btn" data-motor="move_backward">▼ Назад</button>
+            </div>
+        </section>
+
+        <section class="panel panel-voice">
+            <div class="panel-head">
+                <h2>Голосовой ассистент</h2>
+                <span class="badge" id="voice-status-badge">disconnected</span>
+            </div>
+            <div class="voice-controls">
+                <button class="btn primary" id="btn-trigger">Активировать</button>
+                <button class="btn danger" id="btn-stop">Остановить</button>
+            </div>
+            <div class="voice-channels">
+                <button class="btn voice-toggle" id="btn-mic">
+                    <span class="voice-toggle-icon">🎤</span>
+                    <span class="voice-toggle-label">МИКРОФОН</span>
+                </button>
+                <button class="btn voice-toggle" id="btn-speaker">
+                    <span class="voice-toggle-icon">🔊</span>
+                    <span class="voice-toggle-label">ДИНАМИК</span>
+                </button>
+            </div>
+            <p class="hint">
+                Микрофон и динамик задействуют двунаправленный канал <code>/api/broadcast/voice</code>:
+                можно слушать робота и говорить через него.
+            </p>
+        </section>
+
+        <section class="panel panel-emotions">
+            <div class="panel-head">
+                <h2>Эмоции</h2>
+                <span class="hint">Кликните, чтобы выставить</span>
+            </div>
+            <div class="emotions-grid" id="emotions-grid"></div>
+        </section>
+
+        <section class="panel panel-question">
+            <div class="panel-head">
+                <h2>Сохранить в журнал</h2>
+                <span class="hint">Для анализа</span>
+            </div>
+            <form id="manual-answer-form" class="manual-form">
+                <label>Вопрос абитуриента
+                    <textarea id="manual-question" rows="2" placeholder="Например: какие есть бюджетные места на ИВТ?"></textarea>
+                </label>
+                <label>Ваш ответ
+                    <textarea id="manual-answer" rows="3" placeholder="Что ответил оператор/робот"></textarea>
+                </label>
+                <div class="manual-actions">
+                    <select id="manual-topic">
+                        <option value="">Без темы</option>
+                        <option value="admission">Поступление</option>
+                        <option value="programs">Программы/направления</option>
+                        <option value="scores">Проходные баллы</option>
+                        <option value="docs">Документы</option>
+                        <option value="dorm">Общежитие</option>
+                        <option value="scholarship">Стипендии и льготы</option>
+                        <option value="contacts">Контакты</option>
+                        <option value="other">Другое</option>
+                    </select>
+                    <button class="btn primary" type="submit">Сохранить</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel panel-events">
+            <div class="panel-head">
+                <h2>События ассистента</h2>
+                <button class="btn ghost small" id="btn-clear-events">Очистить</button>
+            </div>
+            <ul class="event-list" id="event-list"></ul>
+        </section>
+
+        <section class="panel panel-log">
+            <div class="panel-head">
+                <h2>Журнал вопросов</h2>
+                <button class="btn ghost small" id="btn-reload-questions">Обновить</button>
+            </div>
+            <ul class="question-list" id="question-list">
+                <li class="empty">Журнал пуст</li>
+            </ul>
+        </section>
+    </main>
+</body>
+
+</html>

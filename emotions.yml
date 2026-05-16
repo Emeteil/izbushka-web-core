@@ -1,27 +1,39 @@
 default: neutral
 
 items:
-  - id: happy
-    name: HAPPY
-    emoji: "😊"
-  - id: sad
-    name: SAD
-    emoji: "😢"
-  - id: angry
-    name: ANGRY
-    emoji: "😠"
-  - id: surprised
-    name: SURPRISED
-    emoji: "😯"
   - id: neutral
     name: NEUTRAL
     emoji: "😐"
-  - id: wink
-    name: WINK
-    emoji: "😉"
-  - id: aggressive
-    name: AGGRESSIVE
-    emoji: "😡"
+  - id: greeting
+    name: GREETING
+    emoji: "👋"
+  - id: happy
+    name: HAPPY
+    emoji: "😊"
+  - id: listening
+    name: LISTENING
+    emoji: "👂"
+  - id: thinking
+    name: THINKING
+    emoji: "🤔"
+  - id: explaining
+    name: EXPLAINING
+    emoji: "🧑‍🏫"
   - id: confused
     name: CONFUSED
     emoji: "😕"
+  - id: surprised
+    name: SURPRISED
+    emoji: "😯"
+  - id: wink
+    name: WINK
+    emoji: "😉"
+  - id: proud
+    name: PROUD
+    emoji: "🎓"
+  - id: bye
+    name: BYE
+    emoji: "🙋"
+  - id: sleep
+    name: SLEEP
+    emoji: "😴"

@@ -42,6 +42,7 @@ import api.com_link_rt_api
 import api.webcam_api
 import api.voice_link
 import api.voice_broadcast
+import api.questions_api
 from utils.connection_manager import manager
 from settings import com_link_connection, com_link_commands, transport_bus
 import asyncio
@@ -147,6 +148,13 @@ async def controlPage(request: Request):
     if not logged:
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("control.html", {"request": request})
+
+@app.get("/operator", include_in_schema=False)
+async def operatorPage(request: Request):
+    logged, _ = await is_logged(request, "cookies")
+    if not logged:
+        return RedirectResponse(url="/login", status_code=303)
+    return templates.TemplateResponse("operator.html", {"request": request})
 
 @app.get("/admin", include_in_schema=False)
 async def adminPage(request: Request):

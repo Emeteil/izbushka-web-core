@@ -18,6 +18,8 @@ transport:
 open_browser_on_start: false
 
 users_json_path: "database/users.json"
+questions_log_path: "database/questions.json"
+questions_log_max_entries: 5000
 
 environment_variables:
   - "flask_secret"

@@ -74,10 +74,14 @@ def _build_transport_bus(transport_cfg: dict) -> TransportBus:
 transport_bus = _build_transport_bus(settings.get("transport", {}))
 print(f"Transport bus: {[s['name'] for s in transport_bus.status()]}")
 
-from services import SensorService, HealthService, EmotionRegistry
+from services import SensorService, HealthService, EmotionRegistry, QuestionsLogService
 import time as _time
 sensor_service = SensorService(transport_bus, com_link_commands)
 emotion_registry = EmotionRegistry.from_yaml(settings.get("emotions_config_path", "emotions.yml"))
+questions_log = QuestionsLogService(
+    file_path=settings.get("questions_log_path", "database/questions.json"),
+    max_entries=settings.get("questions_log_max_entries", 5000),
+)
 health_service = HealthService(
     transport_bus=transport_bus,
     sensor_service=sensor_service,
