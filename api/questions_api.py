@@ -2,7 +2,7 @@ from fastapi import APIRouter, Query
 from dataclasses import asdict
 
 from authorization import login_required
-from utils.api_response import apiResponse, ApiError
+from utils.api_response import apiResponse
 from utils.connection_manager import manager
 from settings import app, questions_log
 from api.schemas.questions import (
@@ -13,6 +13,7 @@ from api.schemas.questions import (
 )
 
 router = APIRouter(prefix="/api/questions", tags=["Questions"])
+
 
 @router.post(
     "",

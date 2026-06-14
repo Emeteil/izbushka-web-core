@@ -10,25 +10,28 @@ from api.schemas.emotions import (
 
 router = APIRouter(prefix="/api/emotions", tags=["Emotions"])
 
+
 async def _broadcast_change(emotion: str, source: str) -> None:
     await manager.broadcast({
         "event": "system.emotion_changed",
         "data": {"emotion": emotion, "source": source},
     })
 
+
 @router.get("/current",
-    response_model=EmotionResponse,
-    summary="Получить текущую эмоцию",
-    description="Возвращает текущую эмоцию, которая отображается на лице робота."
-)
+            response_model=EmotionResponse,
+            summary="Получить текущую эмоцию",
+            description="Возвращает текущую эмоцию, которая отображается на лице робота."
+            )
 async def get_current_emotion():
     return apiResponse({"emotion": emotion_registry.current})
 
+
 @router.put("/current",
-    response_model=EmotionSetResponse,
-    summary="Изменить текущую эмоцию",
-    description="Устанавливает новую эмоцию для робота и оповещает всех подключённых по WebSocket клиентов."
-)
+            response_model=EmotionSetResponse,
+            summary="Изменить текущую эмоцию",
+            description="Устанавливает новую эмоцию для робота и оповещает всех подключённых по WebSocket клиентов."
+            )
 async def set_emotion_http(req: SetEmotionRequest, payload: dict = login_required()):
     try:
         emotion_registry.set_current(req.emotion)
@@ -38,11 +41,12 @@ async def set_emotion_http(req: SetEmotionRequest, payload: dict = login_require
     await _broadcast_change(req.emotion, source="http")
     return apiResponse({"message": f"Emotion changed to {req.emotion}", "emotion": req.emotion})
 
+
 @router.get("",
-    response_model=EmotionListResponse,
-    summary="Получить список всех эмоций",
-    description="Возвращает полный список доступных эмоций и текущую активную эмоцию."
-)
+            response_model=EmotionListResponse,
+            summary="Получить список всех эмоций",
+            description="Возвращает полный список доступных эмоций и текущую активную эмоцию."
+            )
 @router.get("/", response_model=EmotionListResponse, include_in_schema=False)
 async def list_emotions():
     return apiResponse({

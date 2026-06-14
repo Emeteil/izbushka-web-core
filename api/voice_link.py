@@ -13,6 +13,7 @@ logger = logging.getLogger("voice_link")
 
 router = APIRouter(prefix="/api/voice", tags=["Voice Link"])
 
+
 class VoiceLinkState:
     def __init__(self):
         self.connected: bool = False
@@ -119,19 +120,20 @@ async def voice_link_ws(websocket: WebSocket):
 
 
 @router.get("/status",
-    response_model=VoiceLinkStatusResponse,
-    summary="Статус голосового интерфейса",
-    description="Возвращает текущее состояние voice-interface: подключение, статус ассистента, последние события."
-)
+            response_model=VoiceLinkStatusResponse,
+            summary="Статус голосового интерфейса",
+            description="Возвращает текущее состояние voice-interface: подключение, "
+                        "статус ассистента, последние события."
+            )
 async def get_voice_status(payload: dict = login_required()):
     return apiResponse(voice_state.to_dict())
 
 
 @router.post("/trigger",
-    response_model=VoiceLinkCommandResponse,
-    summary="Вызвать ассистента",
-    description="Отправляет команду запуска голосового ассистента без необходимости произнесения wake word."
-)
+             response_model=VoiceLinkCommandResponse,
+             summary="Вызвать ассистента",
+             description="Отправляет команду запуска голосового ассистента без необходимости произнесения wake word."
+             )
 async def trigger_voice(payload: dict = login_required()):
     if not voice_state.connected:
         raise ApiError(503, "Voice interface not connected")
@@ -146,10 +148,10 @@ async def trigger_voice(payload: dict = login_required()):
 
 
 @router.post("/stop",
-    response_model=VoiceLinkCommandResponse,
-    summary="Остановить ассистента",
-    description="Отправляет команду остановки активной сессии голосового ассистента."
-)
+             response_model=VoiceLinkCommandResponse,
+             summary="Остановить ассистента",
+             description="Отправляет команду остановки активной сессии голосового ассистента."
+             )
 async def stop_voice(payload: dict = login_required()):
     if not voice_state.connected:
         raise ApiError(503, "Voice interface not connected")

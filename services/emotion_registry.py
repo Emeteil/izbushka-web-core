@@ -3,8 +3,10 @@ from typing import Dict, List, Optional
 import threading
 import yaml
 
+
 class EmotionNotFoundError(ValueError):
     pass
+
 
 class EmotionRegistry:
     def __init__(self, items: List[dict], default: str):

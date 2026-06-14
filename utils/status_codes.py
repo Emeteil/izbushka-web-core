@@ -25,7 +25,7 @@ status_codes = {
     },
     406: {
         "title": "406 Not Acceptable",
-        "description": "The requested resource is capable of generating only content not acceptable according to the Accept headers sent in the request."
+        "description": "The requested resource is capable of generating only content not acceptable according to the Accept headers sent in the request."  # noqa: E501
     },
     407: {
         "title": "407 Proxy Authentication Required",
@@ -45,11 +45,11 @@ status_codes = {
     },
     411: {
         "title": "411 Length Required",
-        "description": "The request did not specify the length of its content, which is required by the requested resource."
+        "description": "The request did not specify the length of its content, which is required by the requested resource."  # noqa: E501
     },
     412: {
         "title": "412 Precondition Failed",
-        "description": "The server does not meet one of the preconditions that the requester put on the request header fields."
+        "description": "The server does not meet one of the preconditions that the requester put on the request header fields."  # noqa: E501
     },
     413: {
         "title": "413 Payload Too Large",
@@ -109,11 +109,11 @@ status_codes = {
     },
     431: {
         "title": "431 Request Header Fields Too Large",
-        "description": "The server is unwilling to process the request because either an individual header field, or all the header fields collectively, are too large."
+        "description": "The server is unwilling to process the request because either an individual header field, or all the header fields collectively, are too large."  # noqa: E501
     },
     451: {
         "title": "451 Unavailable For Legal Reasons",
-        "description": "A server operator has received a legal demand to deny access to a resource or to a set of resources."
+        "description": "A server operator has received a legal demand to deny access to a resource or to a set of resources."  # noqa: E501
     },
     500: {
         "title": "500 Internal Server Error",
@@ -121,19 +121,19 @@ status_codes = {
     },
     501: {
         "title": "501 Not Implemented",
-        "description": "The server either does not recognize the request method, or it lacks the ability to fulfill the request."
+        "description": "The server either does not recognize the request method, or it lacks the ability to fulfill the request."  # noqa: E501
     },
     502: {
         "title": "502 Bad Gateway",
-        "description": "The server, while acting as a gateway or proxy, received an invalid response from an upstream server."
+        "description": "The server, while acting as a gateway or proxy, received an invalid response from an upstream server."  # noqa: E501
     },
     503: {
         "title": "503 Service Unavailable",
-        "description": "The server is currently unable to handle the request due to a temporary overload or scheduled maintenance."
+        "description": "The server is currently unable to handle the request due to a temporary overload or scheduled maintenance."  # noqa: E501
     },
     504: {
         "title": "504 Gateway Timeout",
-        "description": "The server, while acting as a gateway or proxy, did not receive a timely response from an upstream server."
+        "description": "The server, while acting as a gateway or proxy, did not receive a timely response from an upstream server."  # noqa: E501
     },
     505: {
         "title": "505 HTTP Version Not Supported",

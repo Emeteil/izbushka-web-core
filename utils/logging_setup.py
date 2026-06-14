@@ -13,6 +13,7 @@ _RESERVED_RECORD_KEYS = {
     "processName", "process", "message", "asctime", "trace_id",
 }
 
+
 class TraceIdFilter(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         record.trace_id = get_trace_id() or "-"

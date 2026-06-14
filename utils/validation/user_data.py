@@ -2,7 +2,7 @@ from typing import List, Optional, Tuple
 from beartype import beartype
 import re
 
-from settings import *
+from settings import settings
 
 NICKNAME_LENGTH: Tuple[int, int] = tuple(settings["user_data_settings"]["length"]["nickname"])
 PASSWORD_LENGTH: Tuple[int, int] = tuple(settings["user_data_settings"]["length"]["password"])
@@ -14,10 +14,11 @@ PASSWORD_REQUIREMENTS: dict[str, bool] = {
 }
 SPECIAL_CHARS: str = r"" + settings["user_data_settings"]["regex"]["special_chars"]
 
+
 @beartype
 def validate_nickname(nickname: Optional[str]):
     errors = []
-    
+
     if not nickname:
         errors.append("Nickname is required.")
     elif len(nickname) < NICKNAME_LENGTH[0]:
@@ -26,6 +27,7 @@ def validate_nickname(nickname: Optional[str]):
         errors.append(f"Nickname must not exceed {NICKNAME_LENGTH[1]} characters.")
 
     return errors
+
 
 @beartype
 def validate_password(password: Optional[str]):
@@ -38,7 +40,7 @@ def validate_password(password: Optional[str]):
             errors.append(f"Password must be at least {PASSWORD_LENGTH[0]} characters long.")
         elif len(password) > PASSWORD_LENGTH[1]:
             errors.append(f"Password must not exceed {PASSWORD_LENGTH[1]} characters.")
-        
+
         if PASSWORD_REQUIREMENTS["uppercase"] and not re.search(r"[A-Z]", password):
             errors.append("Password must contain at least one uppercase letter.")
         if PASSWORD_REQUIREMENTS["lowercase"] and not re.search(r"[a-z]", password):
@@ -50,13 +52,14 @@ def validate_password(password: Optional[str]):
 
     return errors
 
+
 @beartype
 def validate_register_data(
-        nickname: Optional[str],
-        password: Optional[str]
-    ) -> List[str]:
+    nickname: Optional[str],
+    password: Optional[str]
+) -> List[str]:
     errors = []
-    
+
     errors.extend(validate_nickname(nickname))
     errors.extend(validate_password(password))
 

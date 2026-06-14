@@ -1,5 +1,5 @@
 from fastapi.responses import JSONResponse
-from settings import * 
+
 
 def apiResponse(data, code: int = 200, errorMessage: str = "Error") -> JSONResponse:
     if not (400 <= code <= 599):
@@ -25,6 +25,6 @@ class ApiError(Exception):
     def __init__(self, code=500, data=None):
         self.code = code
         self.data = data
-        
+
     def __str__(self):
         return str(self.data)

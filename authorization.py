@@ -14,6 +14,7 @@ cookie_scheme = APIKeyCookie(name="token", auto_error=False)
 header_scheme = APIKeyHeader(name="Authorization", auto_error=False)
 query_scheme = APIKeyQuery(name="token", auto_error=False)
 
+
 @beartype
 def _verify_token(token: str) -> Optional[Dict[str, Any]]:
     if token == settings.get("MASTER_TOKEN"):
@@ -21,8 +22,8 @@ def _verify_token(token: str) -> Optional[Dict[str, Any]]:
 
     try:
         payload: Dict[str, Any] = jwt.decode(
-            token, 
-            settings.get("SECRET_KEY"), 
+            token,
+            settings.get("SECRET_KEY"),
             algorithms=["HS256"]
         )
         return payload
@@ -31,10 +32,11 @@ def _verify_token(token: str) -> Optional[Dict[str, Any]]:
     except jwt.InvalidTokenError:
         return None
 
+
 @beartype
 async def is_logged(request: Request, field: str = "headers", raise_on: bool = False) -> Tuple[bool, dict]:
     token: Optional[str] = None
-    
+
     try:
         match field:
             case "headers":
@@ -53,56 +55,60 @@ async def is_logged(request: Request, field: str = "headers", raise_on: bool = F
             case "data":
                 data = await request.form()
                 token = data.get("token")
-    except:
+    except BaseException:
         if raise_on:
             raise HTTPException(status_code=400, detail="Invalid request format")
         return (False, {})
-    
+
     if token:
         token = token.strip()
-    
+
     if not token:
         if raise_on:
             raise HTTPException(status_code=401, detail="Authentication token missing")
         return (False, {})
-    
+
     payload = _verify_token(token)
-    
+
     if not payload:
         if raise_on:
             raise HTTPException(status_code=401, detail="Invalid or expired token")
         return (False, {})
-    
+
     if not payload.get("master"):
         user = get_user_by_id(payload.get("user_id"))
-        
+
         if not user:
             if raise_on:
                 raise HTTPException(status_code=401, detail="User not found")
             return (False, {})
-    
+
     return (True, payload)
 
+
 async def check_login_headers(
-    request: Request, 
+    request: Request,
     token: str = Depends(header_scheme)
 ):
     logged, payload = await is_logged(request, "headers", True)
     return payload
 
+
 async def check_login_cookies(
-    request: Request, 
+    request: Request,
     token: str = Depends(cookie_scheme)
 ):
     logged, payload = await is_logged(request, "cookies", True)
     return payload
 
+
 async def check_login_args(
-    request: Request, 
+    request: Request,
     token: str = Depends(query_scheme)
 ):
     logged, payload = await is_logged(request, "args", True)
     return payload
+
 
 def login_required(field: str = "headers"):
     if field == "headers":
@@ -113,6 +119,7 @@ def login_required(field: str = "headers"):
         return Depends(check_login_args)
     return Depends(check_login_headers)
 
+
 async def get_current_user_ws(
     websocket: WebSocket,
     token: Optional[str] = None
@@ -121,30 +128,31 @@ async def get_current_user_ws(
         token = websocket.query_params.get("token")
     if not token:
         token = websocket.cookies.get("token")
-        
+
     if not token:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None
-        
+
     payload = _verify_token(token)
     if not payload:
         await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
         return None
-        
+
     if not payload.get("master"):
         user = get_user_by_id(payload.get("user_id"))
         if not user:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return None
-        
+
     return payload
+
 
 @beartype
 def generate_token(
-        user_id: str, 
-        nickname: str, 
-        TTL: timedelta = timedelta(days=1)
-    ) -> str:
+    user_id: str,
+    nickname: str,
+    TTL: timedelta = timedelta(days=1)
+) -> str:
     payload: Dict[str, Any] = {
         "user_id": user_id,
         "nickname": nickname,

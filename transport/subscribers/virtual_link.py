@@ -12,6 +12,7 @@ logger = logging.getLogger("transport.virtual_link")
 
 HEADER_SIZE = 4
 
+
 class VirtualLinkSubscriber(BaseSubscriber):
     def __init__(self, host: str = "127.0.0.1", port: int = 5470, timeout: float = 2.0, priority: int = 50):
         super().__init__("virtual_link", priority=priority)
@@ -56,13 +57,17 @@ class VirtualLinkSubscriber(BaseSubscriber):
         self._subscriptions.clear()
         self._response_event.set()
         if self._client:
-            try: self._client.close()
-            except: pass
+            try:
+                self._client.close()
+            except BaseException:
+                pass
             self._client = None
             self._tcp_connected = False
         if self._server:
-            try: self._server.close()
-            except: pass
+            try:
+                self._server.close()
+            except BaseException:
+                pass
             self._server = None
 
     def _accept_loop(self):
@@ -70,8 +75,10 @@ class VirtualLinkSubscriber(BaseSubscriber):
             try:
                 client, addr = self._server.accept()
                 if self._client:
-                    try: self._client.close()
-                    except: pass
+                    try:
+                        self._client.close()
+                    except BaseException:
+                        pass
                 self._client = client
                 self._client.settimeout(self._timeout)
                 self._tcp_connected = True

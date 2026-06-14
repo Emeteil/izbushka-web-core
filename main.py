@@ -1,3 +1,17 @@
+from contextlib import asynccontextmanager
+import asyncio
+from settings import com_link_connection, com_link_commands, transport_bus
+from utils.connection_manager import manager
+import api.questions_api
+import api.voice_broadcast
+import api.voice_link
+import api.webcam_api
+import api.com_link_rt_api
+import api.authorization
+import api.websockets
+import api.emotions_api
+import events  # noqa: F401
+import api.admin  # noqa: F401
 from fastapi import Request
 from fastapi.responses import RedirectResponse
 import uvicorn
@@ -33,21 +47,6 @@ async def trace_id_middleware(request: Request, call_next):
         )
         return response
 
-import api.admin
-import events
-import api.emotions_api
-import api.websockets
-import api.authorization
-import api.com_link_rt_api
-import api.webcam_api
-import api.voice_link
-import api.voice_broadcast
-import api.questions_api
-from utils.connection_manager import manager
-from settings import com_link_connection, com_link_commands, transport_bus
-import asyncio
-
-from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def lifespan(app):
@@ -118,7 +117,7 @@ async def lifespan(app):
             com_link_connection.disconnect()
         except Exception as e:
             print(f"Error disconnecting ComLink: {e}")
-            
+
     if transport_bus:
         try:
             transport_bus.stop_all()
@@ -126,6 +125,7 @@ async def lifespan(app):
             print(f"Error stopping transport bus: {e}")
 
 app.router.lifespan_context = lifespan
+
 
 @app.get("/", include_in_schema=False)
 async def mainPage(request: Request):
@@ -135,12 +135,14 @@ async def mainPage(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("index.html", {"request": request})
 
+
 @app.get("/login", include_in_schema=False)
 async def loginPage(request: Request):
     logged, payload = await is_logged(request, "cookies")
     if logged:
         return RedirectResponse(url="/control", status_code=303)
     return templates.TemplateResponse("login.html", {"request": request})
+
 
 @app.get("/control", include_in_schema=False)
 async def controlPage(request: Request):
@@ -149,6 +151,7 @@ async def controlPage(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("control.html", {"request": request})
 
+
 @app.get("/operator", include_in_schema=False)
 async def operatorPage(request: Request):
     logged, _ = await is_logged(request, "cookies")
@@ -156,12 +159,14 @@ async def operatorPage(request: Request):
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("operator.html", {"request": request})
 
+
 @app.get("/admin", include_in_schema=False)
 async def adminPage(request: Request):
     logged, _ = await is_logged(request, "cookies")
     if not logged:
         return RedirectResponse(url="/login", status_code=303)
     return templates.TemplateResponse("admin_panel.html", {"request": request})
+
 
 def open_browser():
     time.sleep(1.5)
@@ -171,10 +176,11 @@ def open_browser():
     url = f"http://{host}:{port}?token={master_token}"
     webbrowser.open(url)
 
+
 if __name__ == "__main__":
     if settings.get("open_browser_on_start", True):
         threading.Thread(target=open_browser, daemon=True).start()
-    
+
     uvicorn.run(
         "main:app",
         host=settings.get("host", "127.0.0.1"),

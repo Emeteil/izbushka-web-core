@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, Optional
 
 from transport import TransportBus
 
+
 class SensorService:
     def __init__(self, transport_bus: TransportBus, com_link_commands: Optional[dict] = None):
         self._bus = transport_bus

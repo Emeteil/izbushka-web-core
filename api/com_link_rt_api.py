@@ -13,57 +13,66 @@ router = APIRouter(prefix="/api/robot", tags=["Robot Hardware"])
 DEFAULT_MOTOR_MASK = 0x03
 ALLOWED_DIRECTIONS = ("forward", "backward", "left", "right")
 
+
 def _check_bus():
     if not transport_bus.has_active():
         raise ApiError(503, "No active transport subscribers")
+
 
 def _require_sensor(payload, label: str):
     if payload is None:
         raise ApiError(503, f"{label} data not available")
     return payload
 
+
 @router.get("/sensors/distance",
-    response_model=DistanceResponse,
-    summary="Получить дистанцию (в см)",
-    description="Запрашивает или возвращает последние данные с датчика дистанции (в сантиметрах). Поддерживает кэширование, если датчик настроен на подписку."
-)
+            response_model=DistanceResponse,
+            summary="Получить дистанцию (в см)",
+            description="Запрашивает или возвращает последние данные с датчика дистанции (в сантиметрах). "
+                        "Поддерживает кэширование, если датчик настроен на подписку."
+            )
 async def get_distance(payload: dict = login_required()):
     _check_bus()
     return apiResponse(_require_sensor(sensor_service.get_distance(), "Distance"))
 
+
 @router.get("/sensors/gyro",
-    response_model=GyroResponse,
-    summary="Получить данные гироскопа",
-    description="Возвращает текущие показатели: ускорения, вращения и температуру гироскопа."
-)
+            response_model=GyroResponse,
+            summary="Получить данные гироскопа",
+            description="Возвращает текущие показатели: ускорения, вращения и температуру гироскопа."
+            )
 async def get_gyro(payload: dict = login_required()):
     _check_bus()
     return apiResponse(_require_sensor(sensor_service.get_gyro(), "Gyro"))
 
+
 @router.get("/sensors/millis",
-    response_model=MillisResponse,
-    summary="Получить миллисекунды (uptime)",
-    description="Возвращает количество миллисекунд (uptime), прошедших с момента старта робота (контроллера)."
-)
+            response_model=MillisResponse,
+            summary="Получить миллисекунды (uptime)",
+            description="Возвращает количество миллисекунд (uptime), прошедших с момента старта робота (контроллера)."
+            )
 async def get_millis(payload: dict = login_required()):
     _check_bus()
     return apiResponse(_require_sensor(sensor_service.get_millis(), "Millis"))
 
+
 @router.post("/ping",
-    response_model=CommandSuccessResponse,
-    summary="Пинг робота",
-    description="Отправить команду ping контроллеру, чтобы убедиться в работоспособности соединения."
-)
+             response_model=CommandSuccessResponse,
+             summary="Пинг робота",
+             description="Отправить команду ping контроллеру, чтобы убедиться в работоспособности соединения."
+             )
 async def ping_robot(payload: dict = login_required()):
     _check_bus()
     result = transport_bus.execute("ping", "execute")
     return apiResponse({"command": "ping", "success": result is not None})
 
+
 @router.post("/motors/speed",
-    response_model=CommandSuccessResponse,
-    summary="Установить скорость моторов",
-    description="Позволяет задавать точную скорость для правого, левого (или обоих) моторов напрямую."
-)
+             response_model=CommandSuccessResponse,
+             summary="Установить скорость моторов",
+             description="Позволяет задавать точную скорость для правого, левого "
+                         "(или обоих) моторов напрямую."
+             )
 async def set_motors_speed(req: MotorsSpeedRequest, payload: dict = login_required()):
     _check_bus()
     try:
@@ -77,11 +86,13 @@ async def set_motors_speed(req: MotorsSpeedRequest, payload: dict = login_requir
     except ValueError as e:
         raise ApiError(400, str(e))
 
+
 @router.post("/motors/direction",
-    response_model=CommandSuccessResponse,
-    summary="Установить направление моторов",
-    description="Позволяет задавать направление (вперед, назад, стоп) для моторов с сохранением текущей скорости."
-)
+             response_model=CommandSuccessResponse,
+             summary="Установить направление моторов",
+             description="Позволяет задавать направление (вперед, назад, стоп) "
+                         "для моторов с сохранением текущей скорости."
+             )
 async def set_motors_direction(req: MotorsDirectionRequest, payload: dict = login_required()):
     _check_bus()
     try:
@@ -95,11 +106,13 @@ async def set_motors_direction(req: MotorsDirectionRequest, payload: dict = logi
     except ValueError as e:
         raise ApiError(400, str(e))
 
+
 @router.post("/motors/move",
-    response_model=CommandSuccessResponse,
-    summary="Движение робота",
-    description="Выполнение высокоуровневых команд движения: вперед, назад, поворот влево, поворот вправо с заданной скоростью."
-)
+             response_model=CommandSuccessResponse,
+             summary="Движение робота",
+             description="Выполнение высокоуровневых команд движения: вперед, назад, "
+                         "поворот влево, поворот вправо с заданной скоростью."
+             )
 async def move_motors(req: MotorsMoveRequest, payload: dict = login_required()):
     _check_bus()
     if req.direction not in ALLOWED_DIRECTIONS:
@@ -113,10 +126,10 @@ async def move_motors(req: MotorsMoveRequest, payload: dict = login_required()):
 
 
 @router.post("/motors/stop",
-    response_model=CommandSuccessResponse,
-    summary="Остановка робота",
-    description="Позволяет плавно остановить робота или применить резкое торможение."
-)
+             response_model=CommandSuccessResponse,
+             summary="Остановка робота",
+             description="Позволяет плавно остановить робота или применить резкое торможение."
+             )
 async def stop_motors(req: MotorsStopRequest, payload: dict = login_required()):
     _check_bus()
     action = "brake" if req.mode == "brake" else "stop_all"
@@ -128,10 +141,11 @@ async def stop_motors(req: MotorsStopRequest, payload: dict = login_required()):
 
 
 @router.post("/servo/{channel}",
-    response_model=CommandSuccessResponse,
-    summary="Управление сервоприводом",
-    description="Позволяет управлять конкретным каналом сервопривода (моментальное или плавное движение до нужного угла)."
-)
+             response_model=CommandSuccessResponse,
+             summary="Управление сервоприводом",
+             description="Позволяет управлять конкретным каналом сервопривода "
+                         "(моментальное или плавное движение до нужного угла)."
+             )
 async def control_servo(channel: int, req: ServoAngleRequest, payload: dict = login_required()):
     _check_bus()
     action = "move_smooth_high" if req.smooth else "move_immediate"
@@ -146,10 +160,11 @@ async def control_servo(channel: int, req: ServoAngleRequest, payload: dict = lo
 
 
 @router.get("/connection",
-    response_model=ConnectionStatusResponse,
-    summary="Статус соединения ComLink RT",
-    description="Возвращает состояние соединения с микроконтроллером, порт и список активных подписок на датчики."
-)
+            response_model=ConnectionStatusResponse,
+            summary="Статус соединения ComLink RT",
+            description="Возвращает состояние соединения с микроконтроллером, "
+                        "порт и список активных подписок на датчики."
+            )
 async def get_connection_status(payload: dict = login_required()):
     is_hardware = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
     vl = transport_bus.get("virtual_link")

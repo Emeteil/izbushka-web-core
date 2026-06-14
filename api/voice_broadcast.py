@@ -9,6 +9,7 @@ logger = logging.getLogger("voice_broadcast")
 
 router = APIRouter(prefix="/api/broadcast", tags=["Voice Broadcast"])
 
+
 class VoiceBroadcastRoom:
     def __init__(self):
         self._clients: Dict[str, WebSocket] = {}
@@ -38,7 +39,9 @@ class VoiceBroadcastRoom:
     def listener_count(self) -> int:
         return len(self._clients)
 
+
 voice_broadcast_room = VoiceBroadcastRoom()
+
 
 @router.websocket("/voice")
 async def voice_broadcast_ws(websocket: WebSocket):

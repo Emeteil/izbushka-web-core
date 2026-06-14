@@ -1,3 +1,6 @@
+from utils.logging_setup import setup_logging
+import time as _time
+from services import SensorService, HealthService, EmotionRegistry, QuestionsLogService
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +10,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from dotenv import load_dotenv
 import secrets
-import yaml, os
+import yaml
+import os
 
 from com_link_rt import (
     ComLinkConnection,
@@ -18,7 +22,7 @@ from com_link_rt import (
     ServoCommand
 )
 from transport import TransportBus, TransportRegistry
-import transport.subscribers
+import transport.subscribers  # noqa: F401
 
 with open("settings.yml", "r", encoding="utf-8") as f:
     settings = yaml.load(f, Loader=yaml.FullLoader)
@@ -43,7 +47,7 @@ try:
         com_link_commands['millis'] = MillisCommand(com_link_connection)
         com_link_commands['motors'] = MotorsCommand(com_link_connection)
         com_link_commands['servo'] = ServoCommand(com_link_connection)
-        
+
         print(f"ComLink RT connected to {port}")
     else:
         print("ComLink RT port not configured")
@@ -51,6 +55,7 @@ try:
 except Exception as e:
     print(f"Failed to initialize ComLink RT: {e}")
     com_link_connection = None
+
 
 def _build_transport_bus(transport_cfg: dict) -> TransportBus:
     bus = TransportBus()
@@ -74,8 +79,6 @@ def _build_transport_bus(transport_cfg: dict) -> TransportBus:
 transport_bus = _build_transport_bus(settings.get("transport", {}))
 print(f"Transport bus: {[s['name'] for s in transport_bus.status()]}")
 
-from services import SensorService, HealthService, EmotionRegistry, QuestionsLogService
-import time as _time
 sensor_service = SensorService(transport_bus, com_link_commands)
 emotion_registry = EmotionRegistry.from_yaml(settings.get("emotions_config_path", "emotions.yml"))
 questions_log = QuestionsLogService(
@@ -113,7 +116,6 @@ limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-from utils.logging_setup import setup_logging
 
 logging_cfg = settings.get("logging", {})
 log_filepath = setup_logging(
@@ -124,4 +126,3 @@ log_filepath = setup_logging(
 
 settings["SECRET_KEY"] = settings.get("flask_secret", secrets.token_urlsafe(32))
 settings["MASTER_TOKEN"] = os.environ.get("MASTER_TOKEN", secrets.token_urlsafe(32))
-

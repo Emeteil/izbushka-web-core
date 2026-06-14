@@ -8,6 +8,7 @@ users_cache = {
     "get_user_by_nickname": TTLCache(maxsize=100, ttl=300)
 }
 
+
 def clear_cache():
     for _, cache in users_cache.items():
         cache.clear()

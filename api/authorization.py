@@ -9,11 +9,13 @@ from api.schemas.auth import LoginRequest, LoginResponse, ApiKeyResponse
 
 router = APIRouter(prefix="/api/authorization", tags=["Authorization"])
 
-@router.post("/login", 
-    response_model=LoginResponse, 
-    summary="Авторизация пользователя", 
-    description="Позволяет пользователю войти в систему по никнейму и паролю, возвращает токен доступа в cookie."
-)
+
+@router.post("/login",
+             response_model=LoginResponse,
+             summary="Авторизация пользователя",
+             description="Позволяет пользователю войти в систему по никнейму и паролю, "
+                         "возвращает токен доступа в cookie."
+             )
 @limiter.limit("6 per 3 minute")
 async def api_login(request: Request, response: Response, req: LoginRequest):
     nickname = req.nickname[:NICKNAME_LENGTH[1]]
@@ -23,33 +25,34 @@ async def api_login(request: Request, response: Response, req: LoginRequest):
         raise ApiError(400, 'Need "nickname" and "password" in data!')
 
     user = get_user_by_nickname(nickname)
-    
+
     if not user or not check_password_hash(user["password_hash"], password):
         raise ApiError(401, "Invalid nickname or password!")
-    
+
     token: str = generate_token(user["id"], user["nickname"])
-    
+
     resp_data = {
         "message": "Login successful",
         "user_id": user["id"],
         "nickname": user["nickname"],
         "preferred_redirect": "/control"
     }
-    
+
     api_resp = apiResponse(resp_data, 200)
     api_resp.set_cookie(key="token", value=token)
-    
+
     return api_resp
 
-@router.post("/request_api_key", 
-    response_model=ApiKeyResponse, 
-    summary="Запросить API ключ", 
-    description="Генерирует и возвращает новый API ключ (токен) для авторизованного пользователя."
-)
+
+@router.post("/request_api_key",
+             response_model=ApiKeyResponse,
+             summary="Запросить API ключ",
+             description="Генерирует и возвращает новый API ключ (токен) для авторизованного пользователя."
+             )
 @limiter.limit("5 per 30 minute")
 async def api_request_api_key(request: Request, payload: dict = login_required()):
     token: str = generate_token(payload["user_id"], payload["nickname"])
-    
+
     return apiResponse({
         "token": token
     }, 201)

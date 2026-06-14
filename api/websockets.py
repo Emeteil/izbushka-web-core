@@ -8,6 +8,7 @@ import json
 
 router = APIRouter(tags=["Websockets"])
 
+
 def _connection_state() -> dict:
     is_hardware = bool(com_link_connection and com_link_connection.ser and com_link_connection.ser.is_open)
     vl = transport_bus.get("virtual_link")
@@ -18,8 +19,10 @@ def _connection_state() -> dict:
         "transport": transport_bus.status(),
     }
 
+
 async def _send_error(ws: WebSocket, message: str) -> None:
     await ws.send_json({"event": "system.error", "data": {"message": message}})
+
 
 async def _handle_emotion(ws: WebSocket, action: str, payload: dict, user_id: str) -> None:
     if action == "get":
@@ -35,6 +38,7 @@ async def _handle_emotion(ws: WebSocket, action: str, payload: dict, user_id: st
         "data": {"emotion": emotion_registry.current, "source": "websocket", "client_id": user_id},
     })
 
+
 async def _handle_sensor_request(ws: WebSocket) -> None:
     if not transport_bus.has_active():
         await ws.send_json({"event": "sensor.data", "data": {}})
@@ -42,24 +46,26 @@ async def _handle_sensor_request(ws: WebSocket) -> None:
     await ws.send_json({"event": "sensor.data", "data": sensor_service.get_all()})
 
 MOTORS_ACTIONS = {
-    "set_speed":     ("set_speed",     ("motor_mask", "speed_left", "speed_right")),
-    "move_forward":  ("move_forward",  ("speed",)),
+    "set_speed": ("set_speed", ("motor_mask", "speed_left", "speed_right")),
+    "move_forward": ("move_forward", ("speed",)),
     "move_backward": ("move_backward", ("speed",)),
-    "turn_left":     ("turn_left",     ("speed",)),
-    "turn_right":    ("turn_right",    ("speed",)),
-    "stop":          ("stop_all",      ()),
-    "brake":         ("brake",         ()),
+    "turn_left": ("turn_left", ("speed",)),
+    "turn_right": ("turn_right", ("speed",)),
+    "stop": ("stop_all", ()),
+    "brake": ("brake", ()),
 }
 
 MOTOR_DEFAULTS = {"motor_mask": 0x03, "speed_left": 0, "speed_right": 0, "speed": 150}
 
 SERVO_ACTIONS = {
-    "move_immediate":   ("move_immediate",   {"channel": 0, "angle": 90}),
-    "move_smooth":      ("move_smooth_high", {"channel": 0, "angle": 90, "step_delay_ms": 50}),
+    "move_immediate": ("move_immediate", {"channel": 0, "angle": 90}),
+    "move_smooth": ("move_smooth_high", {"channel": 0, "angle": 90, "step_delay_ms": 50}),
 }
+
 
 def _kwargs_for(payload: dict, keys, defaults: dict) -> dict:
     return {k: payload.get(k, defaults.get(k)) for k in keys}
+
 
 async def _execute_motors(ws: WebSocket, action: str, payload: dict, wait_response: bool) -> None:
     mapping = MOTORS_ACTIONS.get(action)
@@ -71,7 +77,11 @@ async def _execute_motors(ws: WebSocket, action: str, payload: dict, wait_respon
     kwargs["wait_response"] = wait_response
     success = transport_bus.execute("motors", bus_action, **kwargs)
     if wait_response:
-        await ws.send_json({"event": "command.result", "data": {"target": "motors", "action": action, "success": success}})
+        await ws.send_json({
+            "event": "command.result",
+            "data": {"target": "motors", "action": action, "success": success}
+        })
+
 
 async def _execute_servo(ws: WebSocket, action: str, payload: dict, wait_response: bool) -> None:
     mapping = SERVO_ACTIONS.get(action)
@@ -85,11 +95,16 @@ async def _execute_servo(ws: WebSocket, action: str, payload: dict, wait_respons
     kwargs["wait_response"] = wait_response
     success = transport_bus.execute("servo", bus_action, **kwargs)
     if wait_response:
-        await ws.send_json({"event": "command.result", "data": {"target": "servo", "action": action, "success": success}})
+        await ws.send_json({
+            "event": "command.result",
+            "data": {"target": "servo", "action": action, "success": success}
+        })
+
 
 async def _execute_ping(ws: WebSocket) -> None:
     result = transport_bus.execute("ping", "execute")
     await ws.send_json({"event": "command.result", "data": {"target": "ping", "success": result is not None}})
+
 
 async def _handle_robot(ws: WebSocket, target: str, payload: dict) -> None:
     if not transport_bus.has_active():
@@ -109,6 +124,7 @@ async def _handle_robot(ws: WebSocket, target: str, payload: dict) -> None:
     except Exception as e:
         await _send_error(ws, str(e))
 
+
 async def _dispatch(ws: WebSocket, event: str, payload: dict, user_id: str) -> None:
     if event == "emotion.set":
         await _handle_emotion(ws, "set", payload, user_id)
@@ -120,6 +136,7 @@ async def _dispatch(ws: WebSocket, event: str, payload: dict, user_id: str) -> N
         await _handle_robot(ws, event.split(".", 1)[1], payload)
     else:
         await _send_error(ws, f"Unknown event namespace: {event}")
+
 
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

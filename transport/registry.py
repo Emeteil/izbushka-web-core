@@ -1,10 +1,13 @@
 from typing import Callable, Dict, List
 from .base import BaseSubscriber
 
+
 class TransportError(Exception):
     pass
 
+
 TransportFactory = Callable[[dict], BaseSubscriber]
+
 
 class TransportRegistry:
     _factories: Dict[str, TransportFactory] = {}

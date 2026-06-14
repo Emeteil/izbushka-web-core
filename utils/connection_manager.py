@@ -1,6 +1,7 @@
 from typing import Dict, List, Any, Set
 from fastapi import WebSocket
 
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: Dict[str, List[WebSocket]] = {}
@@ -52,5 +53,6 @@ class ConnectionManager:
                 rooms_to_delete.append(room_id)
         for room_id in rooms_to_delete:
             del self.rooms[room_id]
+
 
 manager = ConnectionManager()
