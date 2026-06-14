@@ -43,3 +43,4 @@ emotions_config_path: "emotions.yml"
 
 load_dotenv: true
 debug: false
+production: false

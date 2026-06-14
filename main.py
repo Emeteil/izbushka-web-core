@@ -23,6 +23,7 @@ import logging
 from settings import app, settings, templates
 from authorization import is_logged
 from utils.tracing import trace_scope, get_trace_id
+from api.voice_link import voice_state
 
 _request_logger = logging.getLogger("http")
 
@@ -48,9 +49,26 @@ async def trace_id_middleware(request: Request, call_next):
         return response
 
 
+_prod_logger = logging.getLogger("production")
+
+
 @asynccontextmanager
 async def lifespan(app):
     loop = asyncio.get_event_loop()
+
+    if settings.get("production", False):
+        timeout = settings.get("production_voice_timeout", 60.0)
+        _prod_logger.info(
+            f"Production mode: ожидание подключения voice-interface (таймаут {timeout}с)..."
+        )
+        deadline = time.monotonic() + timeout
+        while not voice_state.connected:
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"Production mode: voice-interface не подключилась за {timeout}с. Остановка."
+                )
+            await asyncio.sleep(1.0)
+        _prod_logger.info("Production mode: voice-interface подключена. Запуск.")
 
     def on_distance_data(distance):
         if distance is not None:
