@@ -16,6 +16,21 @@ body {
     overflow: hidden;
 }
 
+.emotion-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #2c3e50;
+    color: #ecf0f1;
+    font-size: 15vw;
+    font-weight: bold;
+    text-align: center;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    text-transform: capitalize;
+}
+
 .robot-face {
     background: #2c3e50;
     width: 100vmin;

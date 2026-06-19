@@ -207,6 +207,20 @@ class RobotEmotions {
             this.shakeInterval = null;
         }
 
+        const supported = ['happy', 'sad', 'angry', 'surprised', 'wink', 'neutral', 'aggressive', 'confused'];
+        const overlay = document.getElementById('emotion-overlay');
+        const robotFace = document.querySelector('.robot-face');
+
+        if (!supported.includes(emotion)) {
+            robotFace.style.display = 'none';
+            overlay.textContent = emotion;
+            overlay.style.display = 'flex';
+            return;
+        }
+
+        overlay.style.display = 'none';
+        robotFace.style.display = '';
+
         this.face.style.transform = 'scale(1)';
         this.face.className = 'face-container';
 
