@@ -136,6 +136,7 @@
             this._destroyed = false;
 
             this._audioCtx = null;
+            this._audioCtxReady = null;
             this._micStream = null;
             this._micSource = null;
             this._captureGain = null;
@@ -190,6 +191,7 @@
                 this._audioCtx.close().catch(() => { });
                 this._audioCtx = null;
             }
+            this._audioCtxReady = null;
             this.micEnabled = false;
             this.speakerEnabled = false;
             this._notifyStatus();
@@ -197,23 +199,38 @@
 
         async _ensureAudioContext() {
             if (this._audioCtx && this._audioCtx.state !== 'closed') {
+                if (this._audioCtxReady) await this._audioCtxReady;
                 if (this._audioCtx.state === 'suspended') {
                     await this._audioCtx.resume();
                 }
                 return;
             }
 
-            this._audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            this._audioCtxReady = (async () => {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                this._audioCtx = ctx;
 
-            await Promise.all([
-                this._audioCtx.audioWorklet.addModule(CAPTURE_WORKLET_URL),
-                this._audioCtx.audioWorklet.addModule(PLAYBACK_WORKLET_URL),
-            ]);
+                await Promise.all([
+                    ctx.audioWorklet.addModule(CAPTURE_WORKLET_URL),
+                    ctx.audioWorklet.addModule(PLAYBACK_WORKLET_URL),
+                ]);
 
-            this._captureWorkletReady = true;
-            this._playbackWorkletReady = true;
+                this._captureWorkletReady = true;
+                this._playbackWorkletReady = true;
 
-            _log('AudioContext created, worklets loaded. Native SR:', this._audioCtx.sampleRate);
+                _log('AudioContext created, worklets loaded. Native SR:', ctx.sampleRate);
+            })();
+
+            try {
+                await this._audioCtxReady;
+            } catch (e) {
+                this._audioCtxReady = null;
+                if (this._audioCtx) {
+                    this._audioCtx.close().catch(() => { });
+                    this._audioCtx = null;
+                }
+                throw e;
+            }
         }
 
         async _ensureWebSocket() {
