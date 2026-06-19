@@ -210,6 +210,13 @@
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 this._audioCtx = ctx;
 
+                if (!ctx.audioWorklet) {
+                    throw new Error(
+                        'AudioWorklet unavailable: voice requires a secure context (HTTPS or localhost). ' +
+                        'Current origin: ' + location.origin
+                    );
+                }
+
                 await Promise.all([
                     ctx.audioWorklet.addModule(CAPTURE_WORKLET_URL),
                     ctx.audioWorklet.addModule(PLAYBACK_WORKLET_URL),
