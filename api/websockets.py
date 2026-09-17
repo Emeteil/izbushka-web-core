@@ -57,11 +57,6 @@ MOTORS_ACTIONS = {
 
 MOTOR_DEFAULTS = {"motor_mask": 0x03, "speed_left": 0, "speed_right": 0, "speed": 150}
 
-SERVO_ACTIONS = {
-    "move_immediate": ("move_immediate", {"channel": 0, "angle": 90}),
-    "move_smooth": ("move_smooth_high", {"channel": 0, "angle": 90, "step_delay_ms": 50}),
-}
-
 
 def _kwargs_for(payload: dict, keys, defaults: dict) -> dict:
     return {k: payload.get(k, defaults.get(k)) for k in keys}
@@ -83,24 +78,6 @@ async def _execute_motors(ws: WebSocket, action: str, payload: dict, wait_respon
         })
 
 
-async def _execute_servo(ws: WebSocket, action: str, payload: dict, wait_response: bool) -> None:
-    mapping = SERVO_ACTIONS.get(action)
-    if mapping is None:
-        await _send_error(ws, f"Unknown servo action: {action}")
-        return
-    bus_action, defaults = mapping
-    kwargs = {k: payload.get(k, v) for k, v in defaults.items()}
-    if action == "move_smooth":
-        kwargs["step_delay_ms"] = payload.get("step_delay", defaults["step_delay_ms"])
-    kwargs["wait_response"] = wait_response
-    success = transport_bus.execute("servo", bus_action, **kwargs)
-    if wait_response:
-        await ws.send_json({
-            "event": "command.result",
-            "data": {"target": "servo", "action": action, "success": success}
-        })
-
-
 async def _execute_ping(ws: WebSocket) -> None:
     result = transport_bus.execute("ping", "execute")
     await ws.send_json({"event": "command.result", "data": {"target": "ping", "success": result is not None}})
@@ -117,8 +94,6 @@ async def _handle_robot(ws: WebSocket, target: str, payload: dict) -> None:
             await _execute_ping(ws)
         elif target == "motors":
             await _execute_motors(ws, action, payload, wait_response)
-        elif target == "servo":
-            await _execute_servo(ws, action, payload, wait_response)
         else:
             await _send_error(ws, f"Unknown robot target: {target}")
     except Exception as e:

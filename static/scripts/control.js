@@ -184,24 +184,6 @@ joystickManager.on('end', function () {
     updateStatus('SYSTEM IDLE');
 });
 
-function rotateTurret(direction) {
-    let currentAngle = parseInt(localStorage.getItem('turret_angle') || '90');
-    const step = 15;
-
-    if (direction === 'left') currentAngle = Math.min(180, currentAngle + step);
-    if (direction === 'right') currentAngle = Math.max(0, currentAngle - step);
-
-    localStorage.setItem('turret_angle', currentAngle);
-
-    socket.emit('robot.servo', {
-        action: 'move_smooth',
-        channel: 0,
-        angle: currentAngle,
-        wait_response: false
-    });
-    updateStatus(`TURRET: ${currentAngle}°`);
-}
-
 socket.on('connect', () => {
     document.getElementById('connection-indicator').classList.add('connected');
     document.getElementById('connection-indicator').classList.remove('disconnected');
@@ -214,16 +196,6 @@ socket.on('disconnect', () => {
     document.getElementById('connection-indicator').classList.add('disconnected');
     document.getElementById('sys-status').textContent = 'OFFLINE';
     updateStatus('CONNECTION LOST');
-});
-
-socket.on('sensor.data', (data) => {
-    if (data.distance) {
-        document.getElementById('sensor-dist').textContent = data.distance.distance_cm + ' CM';
-    }
-    if (data.gyro) {
-        document.getElementById('sensor-temp').textContent = data.gyro.temperature + '°C';
-        document.getElementById('sensor-gyro').textContent = `Y:${data.gyro.gyro[1]}`;
-    }
 });
 
 function updateStatus(msg) {
@@ -323,9 +295,6 @@ async function initStream() {
         setTimeout(initStream, 1000);
     }
 }
-
-document.getElementById('btn-turret-left').addEventListener('click', () => rotateTurret('left'));
-document.getElementById('btn-turret-right').addEventListener('click', () => rotateTurret('right'));
 
 const voiceChannel = new VoiceChannel({ token });
 const micBtn = document.getElementById('btn-voice-mic');

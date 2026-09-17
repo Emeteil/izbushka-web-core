@@ -5,7 +5,6 @@
     <meta charset="UTF-8">
     <title>Admin Panel</title>
     <script src="{{ url_for('static', path='scripts/socketio_mock.js') }}"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="{{ url_for('static', path='scripts/admin.js') }}" defer></script>
 </head>
 
@@ -126,19 +125,7 @@
 
     <h3>Sensor Data</h3>
     <div id="sensor-data">
-        <div id="distance-display">Distance: -- cm</div>
-        <div id="gyro-display">Gyro: --</div>
         <div id="millis-display">Millis: --</div>
-    </div>
-
-    <h3>Sensor Charts</h3>
-    <div style="display: flex; flex-wrap: wrap;">
-        <div style="width: 400px; margin: 10px;">
-            <canvas id="distanceChart"></canvas>
-        </div>
-        <div style="width: 400px; margin: 10px;">
-            <canvas id="gyroChart"></canvas>
-        </div>
     </div>
 
     <h3>Commands</h3>
@@ -154,16 +141,6 @@
         <br><br>
         Speed: <input type="range" id="motor-speed" min="0" max="255" value="150">
         <span id="speed-value">150</span>
-    </div>
-
-    <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">
-        <h4>Servo</h4>
-        Channel: <input type="number" id="servo-channel" value="0" min="0" max="15">
-        Angle: <input type="range" id="servo-angle" min="0" max="180" value="90">
-        <span id="angle-value">90</span>
-        <br><br>
-        <button onclick="sendServoCommand('move_immediate')">Move Immediate</button>
-        <button onclick="sendServoCommand('move_smooth')">Move Smooth</button>
     </div>
 
     <div style="margin-bottom: 20px; padding: 10px; border: 1px solid #ccc;">

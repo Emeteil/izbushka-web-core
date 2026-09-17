@@ -271,12 +271,6 @@ async function setEmotion(emotionId) {
 }
 
 let socket;
-let sensorDataHistory = {
-    distance: [],
-    gyro: [],
-    timestamps: []
-};
-let distanceChart, gyroChart;
 
 function initWebSocket() {
     const token = getToken();
@@ -333,92 +327,10 @@ function updateConnectionStatus(connected) {
 }
 
 function updateSensorData(data) {
-    const now = new Date();
-    sensorDataHistory.timestamps.push(now);
-
-    if (data.distance) {
-        document.getElementById('distance-display').textContent =
-            `Distance: ${data.distance.distance_cm} cm`;
-        sensorDataHistory.distance.push(data.distance.distance_cm);
-    }
-
-    if (data.gyro) {
-        document.getElementById('gyro-display').textContent =
-            `Gyro: Accel(${data.gyro.accel.join(', ')}), Gyro(${data.gyro.gyro.join(', ')}), Temp(${data.gyro.temperature}°C)`;
-        sensorDataHistory.gyro.push(data.gyro.accel[0]);
-    }
-
     if (data.millis) {
         document.getElementById('millis-display').textContent =
             `Millis: ${data.millis.millis}`;
     }
-
-    if (sensorDataHistory.timestamps.length > 50) {
-        sensorDataHistory.timestamps.shift();
-        sensorDataHistory.distance.shift();
-        sensorDataHistory.gyro.shift();
-    }
-
-    updateCharts();
-}
-
-function updateCharts() {
-    if (!distanceChart)
-        initCharts();
-
-    distanceChart.data.labels = sensorDataHistory.timestamps.map(t => t.toLocaleTimeString());
-    distanceChart.data.datasets[0].data = sensorDataHistory.distance;
-    distanceChart.update();
-
-    gyroChart.data.labels = sensorDataHistory.timestamps.map(t => t.toLocaleTimeString());
-    gyroChart.data.datasets[0].data = sensorDataHistory.gyro;
-    gyroChart.update();
-}
-
-function initCharts() {
-    const distanceCtx = document.getElementById('distanceChart').getContext('2d');
-    distanceChart = new Chart(distanceCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Distance (cm)',
-                data: [],
-                borderColor: 'rgb(75, 192, 192)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
-
-    const gyroCtx = document.getElementById('gyroChart').getContext('2d');
-    gyroChart = new Chart(gyroCtx, {
-        type: 'line',
-        data: {
-            labels: [],
-            datasets: [{
-                label: 'Accel X',
-                data: [],
-                borderColor: 'rgb(255, 99, 132)',
-                tension: 0.1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true
-                }
-            }
-        }
-    });
 }
 
 function sendMotorCommand(command) {
@@ -429,26 +341,12 @@ function sendMotorCommand(command) {
     });
 }
 
-function sendServoCommand(command) {
-    const channel = parseInt(document.getElementById('servo-channel').value);
-    const angle = parseInt(document.getElementById('servo-angle').value);
-    socket.emit('robot.servo', {
-        action: command,
-        channel: channel,
-        angle: angle
-    });
-}
-
 function sendPing() {
     socket.emit('robot.ping', {});
 }
 
 document.getElementById('motor-speed').addEventListener('input', function () {
     document.getElementById('speed-value').textContent = this.value;
-});
-
-document.getElementById('servo-angle').addEventListener('input', function () {
-    document.getElementById('angle-value').textContent = this.value;
 });
 
 function showMessage(message, color = 'green') {

@@ -2,22 +2,6 @@ from pydantic import BaseModel, Field
 from typing import Optional
 
 
-class DistanceResponse(BaseModel):
-    distance_cm: float = Field(..., description="Измеренная дистанция в сантиметрах")
-
-
-class GyroData(BaseModel):
-    x: float = Field(..., description="Значение по оси X")
-    y: float = Field(..., description="Значение по оси Y")
-    z: float = Field(..., description="Значение по оси Z")
-
-
-class GyroResponse(BaseModel):
-    accel: GyroData = Field(..., description="Данные акселерометра")
-    gyro: GyroData = Field(..., description="Данные гироскопа")
-    temperature: float = Field(..., description="Температура в градусах Цельсия")
-
-
 class MillisResponse(BaseModel):
     millis: int = Field(..., description="Миллисекунды с момента старта робота")
 
@@ -48,12 +32,6 @@ class MotorsMoveRequest(BaseModel):
 
 class MotorsStopRequest(BaseModel):
     mode: str = Field(..., description="Режим остановки: stop или brake")
-
-
-class ServoAngleRequest(BaseModel):
-    angle: int = Field(..., description="Целевой угол в градусах (0-180)")
-    smooth: Optional[bool] = Field(True, description="Использовать плавное перемещение")
-    step_delay: Optional[int] = Field(50, description="Задержка на шаг в миллисекундах для плавного движения")
 
 
 class ConnectionStatusResponse(BaseModel):
