@@ -16,10 +16,8 @@ import os
 from com_link_rt import (
     ComLinkConnection,
     PingCommand,
-    DistanceCommand,
     MillisCommand,
     MotorsCommand,
-    ServoCommand
 )
 from transport import TransportBus, TransportRegistry
 import transport.subscribers  # noqa: F401
@@ -43,10 +41,8 @@ try:
         com_link_connection.connect()
 
         com_link_commands['ping'] = PingCommand(com_link_connection)
-        com_link_commands['distance'] = DistanceCommand(com_link_connection)
         com_link_commands['millis'] = MillisCommand(com_link_connection)
         com_link_commands['motors'] = MotorsCommand(com_link_connection)
-        com_link_commands['servo'] = ServoCommand(com_link_connection)
 
         print(f"ComLink RT connected to {port}")
     else:

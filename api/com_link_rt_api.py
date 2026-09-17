@@ -3,9 +3,9 @@ from authorization import login_required
 from utils.api_response import apiResponse, ApiError
 from settings import app, com_link_connection, settings, transport_bus, sensor_service
 from api.schemas.com_link import (
-    DistanceResponse, GyroResponse, MillisResponse, CommandSuccessResponse,
+    MillisResponse, CommandSuccessResponse,
     ConnectionStatusResponse, MotorsSpeedRequest, MotorsDirectionRequest,
-    MotorsMoveRequest, MotorsStopRequest, ServoAngleRequest
+    MotorsMoveRequest, MotorsStopRequest
 )
 
 router = APIRouter(prefix="/api/robot", tags=["Robot Hardware"])
@@ -23,27 +23,6 @@ def _require_sensor(payload, label: str):
     if payload is None:
         raise ApiError(503, f"{label} data not available")
     return payload
-
-
-@router.get("/sensors/distance",
-            response_model=DistanceResponse,
-            summary="Получить дистанцию (в см)",
-            description="Запрашивает или возвращает последние данные с датчика дистанции (в сантиметрах). "
-                        "Поддерживает кэширование, если датчик настроен на подписку."
-            )
-async def get_distance(payload: dict = login_required()):
-    _check_bus()
-    return apiResponse(_require_sensor(sensor_service.get_distance(), "Distance"))
-
-
-@router.get("/sensors/gyro",
-            response_model=GyroResponse,
-            summary="Получить данные гироскопа",
-            description="Возвращает текущие показатели: ускорения, вращения и температуру гироскопа."
-            )
-async def get_gyro(payload: dict = login_required()):
-    _check_bus()
-    return apiResponse(_require_sensor(sensor_service.get_gyro(), "Gyro"))
 
 
 @router.get("/sensors/millis",
@@ -136,25 +115,6 @@ async def stop_motors(req: MotorsStopRequest, payload: dict = login_required()):
     try:
         result = transport_bus.execute("motors", action)
         return apiResponse({"command": req.mode, "success": result})
-    except ValueError as e:
-        raise ApiError(400, str(e))
-
-
-@router.post("/servo/{channel}",
-             response_model=CommandSuccessResponse,
-             summary="Управление сервоприводом",
-             description="Позволяет управлять конкретным каналом сервопривода "
-                         "(моментальное или плавное движение до нужного угла)."
-             )
-async def control_servo(channel: int, req: ServoAngleRequest, payload: dict = login_required()):
-    _check_bus()
-    action = "move_smooth_high" if req.smooth else "move_immediate"
-    kwargs = {"channel": channel, "angle": req.angle}
-    if req.smooth:
-        kwargs["step_delay_ms"] = req.step_delay
-    try:
-        result = transport_bus.execute("servo", action, **kwargs)
-        return apiResponse({"command": "servo", "success": result})
     except ValueError as e:
         raise ApiError(400, str(e))
 

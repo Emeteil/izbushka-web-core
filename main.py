@@ -70,38 +70,6 @@ async def lifespan(app):
             await asyncio.sleep(1.0)
         _prod_logger.info("Production mode: voice-interface подключена. Запуск.")
 
-    def on_distance_data(distance):
-        if distance is not None:
-            d = distance if isinstance(distance, (int, float)) else distance
-            if loop.is_running():
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast({"event": "sensor.data", "data": {"distance": {"distance_cm": d}}}),
-                    loop
-                )
-
-    def on_gyro_data(data):
-        if data is not None:
-            if isinstance(data, dict) and "accel" in data:
-                gyro_payload = {
-                    "accel": data.get("accel", (0, 0, 0)),
-                    "gyro": data.get("gyro", (0, 0, 0)),
-                    "temperature": data.get("temperature", 0)
-                }
-            elif com_link_commands and 'gyro' in com_link_commands:
-                cmd = com_link_commands['gyro']
-                gyro_payload = {
-                    "accel": cmd.get_acceleration(data),
-                    "gyro": cmd.get_rotation(data),
-                    "temperature": cmd.get_temperature(data)
-                }
-            else:
-                return
-            if loop.is_running():
-                asyncio.run_coroutine_threadsafe(
-                    manager.broadcast({"event": "sensor.data", "data": {"gyro": gyro_payload}}),
-                    loop
-                )
-
     def on_millis_data(millis):
         if millis is not None:
             if loop.is_running():
@@ -112,9 +80,6 @@ async def lifespan(app):
 
     if com_link_connection and com_link_commands:
         try:
-            com_link_commands['distance'].subscribe(on_distance_data)
-            if 'gyro' in com_link_commands:
-                com_link_commands['gyro'].subscribe(on_gyro_data)
             com_link_commands['millis'].subscribe(on_millis_data)
         except Exception as e:
             print(f"Failed to subscribe to sensors: {e}")
@@ -122,8 +87,6 @@ async def lifespan(app):
         vl = transport_bus.get("virtual_link")
         if vl and hasattr(vl, 'subscribe'):
             try:
-                vl.subscribe("distance", on_distance_data)
-                vl.subscribe("gyro", on_gyro_data)
                 vl.subscribe("millis", on_millis_data)
             except Exception as e:
                 print(f"Failed to subscribe via virtual link: {e}")

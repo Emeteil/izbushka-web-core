@@ -9,7 +9,6 @@
     const MIN_SPEED = 25;
     const MAX_SPEED = 200;
     const MAX_EVENTS = 60;
-    const DISTANCE_MAX_CM = 200;
 
     function getCookie(name) {
         const value = `; ${document.cookie}`;
@@ -35,7 +34,6 @@
         valUplink: $('val-uplink'),
         valRobot: $('val-robot'),
         valVoice: $('val-voice'),
-        valDistance: $('val-distance'),
         valEmotion: $('val-emotion'),
         video: $('video'),
         videoStatus: $('video-status'),
@@ -57,8 +55,6 @@
         manualQuestion: $('manual-question'),
         manualAnswer: $('manual-answer'),
         manualTopic: $('manual-topic'),
-        distanceFill: $('distance-fill'),
-        distanceLabel: $('distance-label'),
     };
 
     function pushEvent(tag, message, kind = '') {
@@ -155,17 +151,7 @@
         });
     });
 
-    ws.on('sensor.data', (data) => {
-        if (data.distance && data.distance.distance_cm != null) {
-            const cm = Number(data.distance.distance_cm);
-            const pct = Math.max(0, Math.min(100, (cm / DISTANCE_MAX_CM) * 100));
-            els.valDistance.textContent = `${cm} см`;
-            els.distanceLabel.textContent = `${cm} см`;
-            els.distanceFill.style.width = `${pct}%`;
-        }
-    });
-
-    ws.on('voice.connected', (data) => {
+ws.on('voice.connected', (data) => {
         setDot(els.dotVoice, 'ok');
         els.valVoice.textContent = data.status || 'idle';
         setVoiceBadge(data.status || 'idle');

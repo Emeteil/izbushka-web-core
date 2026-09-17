@@ -187,15 +187,11 @@ class VirtualLinkSubscriber(BaseSubscriber):
 
     @staticmethod
     def _fallback_result(command: str) -> Any:
-        if command in ("motors", "servo", "ping"):
+        if command in ("motors", "ping"):
             return True
-        elif command == "distance":
-            return 0
         elif command == "millis":
             import time
             return int((time.time() * 1000) % 1000000)
-        elif command == "gyro":
-            return {"accel": (0.0, 0.0, 1.0), "gyro": (0.0, 0.0, 0.0), "temperature": 25.0}
         return True
 
     def _send_message(self, obj: dict):

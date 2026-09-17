@@ -185,8 +185,7 @@ body {
     background: linear-gradient(180deg, rgba(0, 0, 0, 0.8) 0%, transparent 100%);
 }
 
-.status-panel,
-.sensor-panel {
+.status-panel {
     pointer-events: auto;
     background: var(--hud-bg);
     border: var(--hud-border);
@@ -196,10 +195,6 @@ body {
     box-shadow: var(--hud-glow);
     min-width: 250px;
     clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px);
-}
-
-.text-right {
-    text-align: right;
 }
 
 .panel-title {
@@ -246,18 +241,6 @@ body {
     transform: scale(0.95);
 }
 
-.btn-turret {
-    width: 60px;
-    height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    border-radius: 50%;
-    clip-path: none;
-    border: 2px solid var(--hud-primary);
-}
-
 .controls-area {
     display: flex;
     justify-content: space-between;
@@ -291,21 +274,9 @@ body {
     pointer-events: auto;
 }
 
-.turret-wrapper {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    align-items: center;
-}
-
 .label-mini {
     color: var(--hud-secondary);
     font-size: 0.8rem;
-}
-
-.turret-controls {
-    display: flex;
-    gap: 10px;
 }
 
 .extra-buttons {
