@@ -76,7 +76,8 @@ def capture_frames():
             time.sleep(1.0)
         return
 
-    cap = cv2.VideoCapture(0)
+    dev = settings.get("webcam", {}).get("device", 0)
+    cap = cv2.VideoCapture(dev, cv2.CAP_V4L2) if isinstance(dev, str) else cv2.VideoCapture(dev)
 
     cap.set(cv2.CAP_PROP_FPS, video_quality["fps"])
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, video_quality["width"])

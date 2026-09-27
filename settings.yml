@@ -1,7 +1,10 @@
 host: "0.0.0.0"
 port: 80
 
-com_link_rt_port: "COM4"
+com_link_rt_port: null
+
+webcam:
+  device: 0
 
 transport:
   com_link_rt:

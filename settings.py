@@ -25,6 +25,23 @@ import transport.subscribers  # noqa: F401
 with open("settings.yml", "r", encoding="utf-8") as f:
     settings = yaml.load(f, Loader=yaml.FullLoader)
 
+
+def _deep_merge(base: dict, override: dict) -> dict:
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            _deep_merge(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+_overlay_path = os.environ.get("IZB_SETTINGS_OVERLAY")
+if _overlay_path and os.path.isfile(_overlay_path):
+    with open(_overlay_path, "r", encoding="utf-8") as f:
+        _overlay_settings = yaml.load(f, Loader=yaml.FullLoader)
+    if isinstance(_overlay_settings, dict):
+        _deep_merge(settings, _overlay_settings)
+
 if settings.get("load_dotenv"):
     load_dotenv()
 
