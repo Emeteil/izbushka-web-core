@@ -19,10 +19,9 @@ lint: setup
 run: setup
     "{{python}}" main.py
 
-# full first-time install: submodules, .env, admin user in the database
+# full first-time install: submodules
 install:
     git submodule update --init --recursive
-    bash install.sh
 
 clean:
     {{system_python}} -c "import shutil; shutil.rmtree('{{venv}}', ignore_errors=True)"
