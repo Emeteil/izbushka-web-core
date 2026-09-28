@@ -62,9 +62,9 @@ async def handle_error(request: Request, error: Exception):
         )
     else:
         return templates.TemplateResponse(
+            request,
             "error.html",
             {
-                "request": request,
                 "status_code": status_code,
                 "data": status_code_data
             },

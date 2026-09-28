@@ -96,7 +96,7 @@ async def mainPage(request: Request):
     logged2, _ = await is_logged(request, "cookies")
     if not logged and not logged2:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(request, "index.html")
 
 
 @app.get("/login", include_in_schema=False)
@@ -104,7 +104,7 @@ async def loginPage(request: Request):
     logged, payload = await is_logged(request, "cookies")
     if logged:
         return RedirectResponse(url="/control", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request})
+    return templates.TemplateResponse(request, "login.html")
 
 
 @app.get("/control", include_in_schema=False)
@@ -112,7 +112,7 @@ async def controlPage(request: Request):
     logged, _ = await is_logged(request, "cookies")
     if not logged:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("control.html", {"request": request})
+    return templates.TemplateResponse(request, "control.html")
 
 
 @app.get("/operator", include_in_schema=False)
@@ -120,7 +120,7 @@ async def operatorPage(request: Request):
     logged, _ = await is_logged(request, "cookies")
     if not logged:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("operator.html", {"request": request})
+    return templates.TemplateResponse(request, "operator.html")
 
 
 @app.get("/admin", include_in_schema=False)
@@ -128,7 +128,7 @@ async def adminPage(request: Request):
     logged, _ = await is_logged(request, "cookies")
     if not logged:
         return RedirectResponse(url="/login", status_code=303)
-    return templates.TemplateResponse("admin_panel.html", {"request": request})
+    return templates.TemplateResponse(request, "admin_panel.html")
 
 
 def open_browser():
