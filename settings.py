@@ -1,6 +1,6 @@
 from utils.logging_setup import setup_logging
 import time as _time
-from services import SensorService, HealthService, EmotionRegistry, QuestionsLogService
+from services import SensorService, HealthService, EmotionRegistry
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -94,10 +94,6 @@ print(f"Transport bus: {[s['name'] for s in transport_bus.status()]}")
 
 sensor_service = SensorService(transport_bus, com_link_commands)
 emotion_registry = EmotionRegistry.from_yaml(settings.get("emotions_config_path", "emotions.yml"))
-questions_log = QuestionsLogService(
-    file_path=settings.get("questions_log_path", "database/questions.json"),
-    max_entries=settings.get("questions_log_max_entries", 5000),
-)
 health_service = HealthService(
     transport_bus=transport_bus,
     sensor_service=sensor_service,

@@ -139,9 +139,7 @@ code {
 .panel-control  { grid-column: 2 / 3; grid-row: 1 / 2; }
 .panel-voice    { grid-column: 3 / 4; grid-row: 1 / 2; }
 .panel-emotions { grid-column: 2 / 3; grid-row: 2 / 3; }
-.panel-question { grid-column: 3 / 4; grid-row: 2 / 3; }
 .panel-events   { grid-column: 1 / 2; grid-row: 3 / 4; }
-.panel-log      { grid-column: 2 / 4; grid-row: 3 / 4; }
 
 .panel {
     background: linear-gradient(180deg, var(--bg-1), var(--bg-2));
@@ -376,49 +374,7 @@ code {
     color: var(--accent);
 }
 
-.manual-form {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    flex: 1;
-    min-height: 0;
-}
-
-.manual-form label {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    font-size: 11px;
-    color: var(--fg-2);
-    letter-spacing: 1px;
-    text-transform: uppercase;
-}
-
-.manual-form textarea, .manual-form select {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid var(--border);
-    color: var(--fg-0);
-    border-radius: 6px;
-    padding: 8px 10px;
-    font-size: 13px;
-    resize: none;
-}
-
-.manual-form textarea:focus, .manual-form select:focus {
-    outline: none;
-    border-color: var(--accent);
-}
-
-.manual-actions {
-    display: flex;
-    justify-content: space-between;
-    gap: 8px;
-    align-items: center;
-}
-
-.manual-actions select { flex: 1; }
-
-.event-list, .question-list {
+.event-list {
     list-style: none;
     margin: 0;
     padding: 0;
@@ -450,31 +406,6 @@ code {
 .event-list li.error .ev-tag { background: rgba(255,77,109,.2); color: var(--danger); }
 .event-list li.tool  .ev-tag { background: rgba(245,166,35,.2); color: var(--warning); }
 
-.question-list li {
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    font-size: 13px;
-}
-
-.question-list li.empty {
-    color: var(--fg-2);
-    text-align: center;
-    padding: 18px;
-    font-style: italic;
-}
-
-.question-list .q { color: var(--fg-0); font-weight: 500; }
-.question-list .a { color: var(--fg-1); font-size: 12px; margin-top: 4px; }
-.question-list .meta {
-    display: flex;
-    gap: 8px;
-    font-size: 10px;
-    color: var(--fg-2);
-    margin-top: 4px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-}
-
 @media (max-width: 1200px) {
     .grid {
         grid-template-columns: 1fr 1fr;
@@ -486,7 +417,5 @@ code {
     .panel-control  { grid-column: 1; grid-row: auto; }
     .panel-voice    { grid-column: 2; grid-row: auto; }
     .panel-emotions { grid-column: 1; grid-row: auto; }
-    .panel-question { grid-column: 2; grid-row: auto; }
     .panel-events   { grid-column: 1 / 3; grid-row: auto; min-height: 200px; }
-    .panel-log      { grid-column: 1 / 3; grid-row: auto; min-height: 200px; }
 }

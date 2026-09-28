@@ -48,13 +48,7 @@
         voiceBadge: $('voice-status-badge'),
         emotionsGrid: $('emotions-grid'),
         eventList: $('event-list'),
-        questionList: $('question-list'),
         btnClearEvents: $('btn-clear-events'),
-        btnReloadQuestions: $('btn-reload-questions'),
-        manualForm: $('manual-answer-form'),
-        manualQuestion: $('manual-question'),
-        manualAnswer: $('manual-answer'),
-        manualTopic: $('manual-topic'),
     };
 
     function pushEvent(tag, message, kind = '') {
@@ -187,15 +181,6 @@ ws.on('voice.connected', (data) => {
 
     ws.on('voice.error', (data) => {
         pushEvent('ERR', data.message || 'Voice error', 'error');
-    });
-
-    ws.on('question.logged', (data) => {
-        prependQuestion(data);
-        pushEvent('Q', data.question || '');
-    });
-
-    ws.on('question.cleared', () => {
-        renderQuestions([]);
     });
 
     function angleToAction(angle) {
@@ -563,76 +548,9 @@ ws.on('voice.connected', (data) => {
         }
     }
 
-    function prependQuestion(item) {
-        const empty = els.questionList.querySelector('.empty');
-        if (empty) empty.remove();
-        const li = document.createElement('li');
-        const time = new Date(item.created_at || Date.now()).toLocaleTimeString();
-        li.innerHTML = `
-            <div class="q"></div>
-            ${item.answer ? '<div class="a"></div>' : ''}
-            <div class="meta">
-                <span>${time}</span>
-                <span>${item.source || ''}</span>
-                ${item.topic ? `<span>· ${item.topic}</span>` : ''}
-            </div>`;
-        li.querySelector('.q').textContent = item.question;
-        if (item.answer) li.querySelector('.a').textContent = item.answer;
-        els.questionList.prepend(li);
-    }
-
-    function renderQuestions(items) {
-        els.questionList.innerHTML = '';
-        if (!items.length) {
-            const li = document.createElement('li');
-            li.className = 'empty';
-            li.textContent = 'Журнал пуст';
-            els.questionList.appendChild(li);
-            return;
-        }
-        items.forEach(prependQuestion);
-    }
-
-    async function loadQuestions() {
-        try {
-            const r = await fetch('/api/questions/recent?limit=50', { headers: authHeaders });
-            const body = await r.json();
-            if (body.status === 'success') renderQuestions(body.data.items.reverse());
-        } catch (e) {
-            pushEvent('ERR', `Questions: ${e.message || e}`, 'error');
-        }
-    }
-
-    els.btnReloadQuestions.addEventListener('click', loadQuestions);
     els.btnClearEvents.addEventListener('click', () => { els.eventList.innerHTML = ''; });
-
-    els.manualForm.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const q = els.manualQuestion.value.trim();
-        const a = els.manualAnswer.value.trim();
-        if (!q && !a) return;
-        try {
-            const r = await fetch('/api/questions', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', ...authHeaders },
-                body: JSON.stringify({
-                    question: q || '(вручную)',
-                    answer: a || null,
-                    topic: els.manualTopic.value || null,
-                    source: 'operator',
-                }),
-            });
-            if (r.ok) {
-                els.manualQuestion.value = '';
-                els.manualAnswer.value = '';
-            }
-        } catch (err) {
-            pushEvent('ERR', `Save: ${err.message || err}`, 'error');
-        }
-    });
 
     ws.connect();
     startVideo();
     loadEmotions();
-    loadQuestions();
 })();

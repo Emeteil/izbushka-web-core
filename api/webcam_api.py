@@ -1,5 +1,5 @@
-from fastapi import APIRouter
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import Response, StreamingResponse
 from authorization import login_required
 from utils.api_response import apiResponse
 import cv2
@@ -235,6 +235,19 @@ if is_virtual_camera:
             )
 async def webcam_stream(payload: dict = login_required("args")):
     return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+
+
+@router.get("/snapshot",
+            summary="Получить один кадр с камеры",
+            description="Возвращает последний захваченный кадр как одиночный JPEG (не поток). "
+                        "Требует авторизации (через параметр токена)."
+            )
+async def webcam_snapshot(payload: dict = login_required("args")):
+    with frame_lock:
+        frame_data = current_frame_bytes
+    if frame_data is None:
+        raise HTTPException(status_code=404, detail="no frame available yet")
+    return Response(content=frame_data, media_type="image/jpeg")
 
 
 @router.get("/status",

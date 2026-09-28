@@ -2,7 +2,6 @@ from contextlib import asynccontextmanager
 import asyncio
 from settings import com_link_connection, com_link_commands, transport_bus
 from utils.connection_manager import manager
-import api.questions_api
 import api.voice_broadcast
 import api.voice_link
 import api.webcam_api

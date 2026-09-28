@@ -113,51 +113,12 @@
             <div class="emotions-grid" id="emotions-grid"></div>
         </section>
 
-        <section class="panel panel-question">
-            <div class="panel-head">
-                <h2>Сохранить в журнал</h2>
-                <span class="hint">Для анализа</span>
-            </div>
-            <form id="manual-answer-form" class="manual-form">
-                <label>Вопрос абитуриента
-                    <textarea id="manual-question" rows="2" placeholder="Например: какие есть бюджетные места на ИВТ?"></textarea>
-                </label>
-                <label>Ваш ответ
-                    <textarea id="manual-answer" rows="3" placeholder="Что ответил оператор/робот"></textarea>
-                </label>
-                <div class="manual-actions">
-                    <select id="manual-topic">
-                        <option value="">Без темы</option>
-                        <option value="admission">Поступление</option>
-                        <option value="programs">Программы/направления</option>
-                        <option value="scores">Проходные баллы</option>
-                        <option value="docs">Документы</option>
-                        <option value="dorm">Общежитие</option>
-                        <option value="scholarship">Стипендии и льготы</option>
-                        <option value="contacts">Контакты</option>
-                        <option value="other">Другое</option>
-                    </select>
-                    <button class="btn primary" type="submit">Сохранить</button>
-                </div>
-            </form>
-        </section>
-
         <section class="panel panel-events">
             <div class="panel-head">
                 <h2>События ассистента</h2>
                 <button class="btn ghost small" id="btn-clear-events">Очистить</button>
             </div>
             <ul class="event-list" id="event-list"></ul>
-        </section>
-
-        <section class="panel panel-log">
-            <div class="panel-head">
-                <h2>Журнал вопросов</h2>
-                <button class="btn ghost small" id="btn-reload-questions">Обновить</button>
-            </div>
-            <ul class="question-list" id="question-list">
-                <li class="empty">Журнал пуст</li>
-            </ul>
         </section>
     </main>
 </body>
