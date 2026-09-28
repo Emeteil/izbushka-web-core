@@ -13,3 +13,4 @@ opencv-python-headless==4.10.0.84
 PyJWT==2.10.1
 pyserial==3.5
 cachetools==5.3.3
+werkzeug
