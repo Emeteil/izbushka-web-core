@@ -342,6 +342,7 @@ function sendMotorCommand(command) {
 }
 
 function sendPing() {
+    document.getElementById('ping-result').textContent = '';
     socket.emit('robot.ping', {});
 }
 
