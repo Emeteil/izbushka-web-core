@@ -42,6 +42,8 @@
         curAction: $('cur-action'),
         curSpeed: $('cur-speed'),
         btnTrigger: $('btn-trigger'),
+        btnWakeword: $('btn-wakeword'),
+        wakewordLabel: $('wakeword-label'),
         btnStop: $('btn-stop'),
         btnMic: $('btn-mic'),
         btnSpeaker: $('btn-speaker'),
@@ -145,7 +147,44 @@
         });
     });
 
-ws.on('voice.connected', (data) => {
+function setWakeword(enabled) {
+        const known = typeof enabled === 'boolean';
+        els.btnWakeword.disabled = !known;
+        els.btnWakeword.classList.toggle('active', enabled === true);
+        els.btnWakeword.setAttribute('aria-pressed', String(enabled === true));
+        els.wakewordLabel.textContent = !known ? 'WAKE WORD' : `WAKE WORD: ${enabled ? 'ON' : 'OFF'}`;
+    }
+
+    ws.on('voice.wake_word_changed', (data) => {
+        setWakeword(!!data.enabled);
+        pushEvent('VOICE', `Wake word: ${data.enabled ? 'включён' : 'выключен'}`);
+    });
+
+    els.btnWakeword.addEventListener('click', async () => {
+        const next = !els.btnWakeword.classList.contains('active');
+        els.btnWakeword.disabled = true;
+        try {
+            const r = await fetch('/api/voice/wake-word', {
+                method: 'POST',
+                headers: { ...authHeaders, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next }),
+            });
+            if (!r.ok) {
+                const body = await r.json().catch(() => ({}));
+                pushEvent('ERR', `Wake word: ${body.error?.message || r.statusText}`, 'error');
+            }
+        } finally {
+            els.btnWakeword.disabled = false;
+        }
+    });
+
+    fetch('/api/voice/status', { headers: authHeaders })
+        .then(r => r.json())
+        .then(b => setWakeword(b.data?.wake_word_enabled))
+        .catch(() => {});
+
+    ws.on('voice.connected', (data) => {
+        setWakeword(data.wake_word_enabled);
         setDot(els.dotVoice, 'ok');
         els.valVoice.textContent = data.status || 'idle';
         setVoiceBadge(data.status || 'idle');
@@ -153,6 +192,7 @@ ws.on('voice.connected', (data) => {
     });
 
     ws.on('voice.disconnected', () => {
+        setWakeword(null);
         setDot(els.dotVoice, 'err');
         els.valVoice.textContent = 'OFFLINE';
         setVoiceBadge('disconnected');

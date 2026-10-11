@@ -293,6 +293,10 @@ function initWebSocket() {
         updateConnectionStatus(data.connected);
     });
 
+    socket.on('voice.wake_word_changed', (data) => renderWakeWord(!!data.enabled));
+    socket.on('voice.connected', loadWakeWord);
+    socket.on('voice.disconnected', () => renderWakeWord(null));
+
     socket.on('sensor.data', (data) => {
         updateSensorData(data);
     });
@@ -434,7 +438,47 @@ function stopWebcamStream() {
     showMessage('Webcam stream stopped', 'green');
 }
 
+function renderWakeWord(enabled) {
+    const toggle = document.getElementById('wakeword-toggle');
+    const label = document.getElementById('wakeword-state');
+    const known = typeof enabled === 'boolean';
+    toggle.disabled = !known;
+    toggle.checked = enabled === true;
+    label.textContent = !known ? 'voice-interface не подключён' : (enabled ? 'включён' : 'выключен');
+}
+
+async function loadWakeWord() {
+    try {
+        const response = await fetch('/api/voice/status', {
+            headers: { 'Authorization': `Bearer ${getToken()}` }
+        });
+        const body = await response.json();
+        renderWakeWord(body.data ? body.data.wake_word_enabled : null);
+    } catch (error) {
+        renderWakeWord(null);
+    }
+}
+
+document.getElementById('wakeword-toggle').addEventListener('change', async function () {
+    const wanted = this.checked;
+    this.disabled = true;
+    try {
+        const response = await fetch('/api/voice/wake-word', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${getToken()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: wanted })
+        });
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error ? body.error.message : response.statusText);
+        renderWakeWord(body.data.wake_word_enabled);
+    } catch (error) {
+        showMessage(`Wake word: ${error.message}`, 'red');
+        await loadWakeWord();
+    }
+});
+
 document.addEventListener('DOMContentLoaded', function () {
+    loadWakeWord();
     loadEmotions();
     initWebSocket();
     initCharts();

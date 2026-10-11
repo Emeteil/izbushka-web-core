@@ -3,9 +3,10 @@ from authorization import login_required
 from utils.api_response import apiResponse, ApiError
 from utils.connection_manager import manager
 from settings import app, settings
-from api.schemas.voice_link import VoiceLinkStatusResponse, VoiceLinkCommandResponse
+from api.schemas.voice_link import VoiceLinkStatusResponse, VoiceLinkCommandResponse, WakeWordRequest
 from datetime import datetime
 from typing import Optional
+import asyncio
 import json
 import logging
 
@@ -21,6 +22,7 @@ class VoiceLinkState:
         self.last_message: Optional[dict] = None
         self.last_tool_call: Optional[dict] = None
         self.last_error: Optional[str] = None
+        self.wake_word_enabled: Optional[bool] = None
         self.connected_at: Optional[str] = None
         self.updated_at: Optional[str] = None
         self._ws: Optional[WebSocket] = None
@@ -32,6 +34,7 @@ class VoiceLinkState:
             "last_message": self.last_message,
             "last_tool_call": self.last_tool_call,
             "last_error": self.last_error,
+            "wake_word_enabled": self.wake_word_enabled,
             "connected_at": self.connected_at,
             "updated_at": self.updated_at,
         }
@@ -95,6 +98,8 @@ async def voice_link_ws(websocket: WebSocket):
                     voice_state.last_message = data
                 elif event == "voice.tool_call":
                     voice_state.last_tool_call = data
+                elif event == "voice.wake_word_changed":
+                    voice_state.wake_word_enabled = bool(data.get("enabled"))
                 elif event == "voice.error":
                     voice_state.last_error = data.get("message")
 
@@ -110,6 +115,7 @@ async def voice_link_ws(websocket: WebSocket):
     finally:
         voice_state.connected = False
         voice_state.status = "disconnected"
+        voice_state.wake_word_enabled = None
         voice_state._ws = None
         voice_state.update_timestamp()
 
@@ -163,6 +169,27 @@ async def stop_voice(payload: dict = login_required()):
         raise ApiError(502, "Failed to send stop command")
 
     return apiResponse({"message": "Stop command sent"})
+
+
+@router.post("/wake-word",
+             response_model=VoiceLinkStatusResponse,
+             summary="Включить или выключить wake word",
+             description="Переключает распознавание wake word в работающем voice-interface. "
+                         "Ручной вызов ассистента при выключенном wake word продолжает работать."
+             )
+async def set_wake_word(body: WakeWordRequest, payload: dict = login_required()):
+    if not voice_state.connected:
+        raise ApiError(503, "Voice interface not connected")
+
+    success = await voice_state.send_command("voice.wake_word", {"enabled": body.enabled})
+    if not success:
+        raise ApiError(502, "Failed to send wake word command")
+
+    for _ in range(20):
+        if voice_state.wake_word_enabled == body.enabled:
+            break
+        await asyncio.sleep(0.1)
+    return apiResponse(voice_state.to_dict())
 
 
 app.include_router(router)

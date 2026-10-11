@@ -320,6 +320,8 @@ code {
     margin-bottom: 12px;
 }
 
+.voice-wakeword { grid-template-columns: 1fr; }
+
 .voice-toggle {
     display: flex;
     flex-direction: column;
