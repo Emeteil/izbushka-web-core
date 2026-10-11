@@ -8,7 +8,7 @@ class VoiceLinkStatusResponse(BaseModel):
     last_message: Optional[Dict[str, Any]] = Field(None, description="Последнее сообщение от ассистента")
     last_tool_call: Optional[Dict[str, Any]] = Field(None, description="Последний вызов инструмента")
     last_error: Optional[str] = Field(None, description="Последняя ошибка")
-    wake_word_enabled: Optional[bool] = Field(None, description="Включено ли распознавание wake word (None — неизвестно)")
+    wake_word_enabled: Optional[bool] = Field(None, description="Включён ли wake word (None — неизвестно)")
     connected_at: Optional[str] = Field(None, description="Время подключения")
     updated_at: Optional[str] = Field(None, description="Время последнего обновления")
 
