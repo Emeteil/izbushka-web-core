@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter
 from authorization import login_required
 from utils.api_response import apiResponse, ApiError
@@ -44,6 +45,24 @@ async def get_millis(payload: dict = login_required()):
 async def get_distance(payload: dict = login_required()):
     _check_bus()
     return apiResponse(_require_sensor(sensor_service.get_distance(), "Distance"))
+
+
+@router.get("/sensors/magnetometer",
+            summary="Получить данные магнитометра",
+            description="Последнее измерение QMC5883P: сырые значения, поле в мкТл, модуль, курс и статус датчика."
+            )
+async def get_magnetometer(payload: dict = login_required()):
+    _check_bus()
+    return apiResponse(_require_sensor(sensor_service.get_magnetometer(), "Magnetometer"))
+
+
+@router.get("/sensors/gps",
+            summary="Запросить GPS",
+            description="Свежий запрос к NEO-6M: координаты, высота, скорость, курс, DOP, время, спутники."
+            )
+async def get_gps(payload: dict = login_required()):
+    _check_bus()
+    return apiResponse(_require_sensor(await asyncio.to_thread(sensor_service.get_gps), "GPS"))
 
 
 @router.post("/ping",

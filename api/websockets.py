@@ -4,6 +4,8 @@ from utils.tracing import trace_scope
 from authorization import get_current_user_ws
 from settings import app, settings, com_link_connection, transport_bus, sensor_service, emotion_registry
 from services.emotion_registry import EmotionNotFoundError
+from typing import Optional
+import asyncio
 import json
 
 router = APIRouter(tags=["Websockets"])
@@ -78,6 +80,17 @@ async def _execute_motors(ws: WebSocket, action: str, payload: dict, wait_respon
         })
 
 
+async def broadcast_gps() -> Optional[dict]:
+    data = await asyncio.to_thread(sensor_service.get_gps) if transport_bus.has_active() else None
+    await manager.broadcast({"event": "sensor.data", "data": {"gps": data}})
+    return data
+
+
+async def _execute_gps(ws: WebSocket) -> None:
+    data = await broadcast_gps()
+    await ws.send_json({"event": "command.result", "data": {"target": "gps", "success": data is not None}})
+
+
 async def _execute_ping(ws: WebSocket) -> None:
     result = transport_bus.execute("ping", "execute")
     await ws.send_json({"event": "command.result", "data": {"target": "ping", "success": result is not None}})
@@ -94,6 +107,8 @@ async def _handle_robot(ws: WebSocket, target: str, payload: dict) -> None:
             await _execute_ping(ws)
         elif target == "motors":
             await _execute_motors(ws, action, payload, wait_response)
+        elif target == "gps":
+            await _execute_gps(ws)
         else:
             await _send_error(ws, f"Unknown robot target: {target}")
     except Exception as e:

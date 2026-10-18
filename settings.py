@@ -19,6 +19,8 @@ from com_link_rt import (
     MillisCommand,
     MotorsCommand,
     DistanceCommand,
+    MagnetometerCommand,
+    GpsCommand,
 )
 from transport import TransportBus, TransportRegistry
 import transport.subscribers  # noqa: F401
@@ -62,6 +64,8 @@ try:
         com_link_commands['millis'] = MillisCommand(com_link_connection)
         com_link_commands['motors'] = MotorsCommand(com_link_connection)
         com_link_commands['distance'] = DistanceCommand(com_link_connection)
+        com_link_commands['magnetometer'] = MagnetometerCommand(com_link_connection)
+        com_link_commands['gps'] = GpsCommand(com_link_connection)
 
         print(f"ComLink RT connected to {port}")
     else:

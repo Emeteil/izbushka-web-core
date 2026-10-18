@@ -194,6 +194,8 @@ class VirtualLinkSubscriber(BaseSubscriber):
             return int((time.time() * 1000) % 1000000)
         elif command == "distance":
             return [0xFFFF] * 8
+        elif command in ("magnetometer", "gps"):
+            return None
         return True
 
     def _send_message(self, obj: dict):

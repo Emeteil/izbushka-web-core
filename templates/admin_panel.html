@@ -6,6 +6,31 @@
     <title>Admin Panel</title>
     <script src="/static/scripts/socketio_mock.js"></script>
     <script src="/static/scripts/admin.js" defer></script>
+    <style>
+        .mag-panel, .gps-panel { max-width: 760px; margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; }
+        .mag-panel { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; }
+        .mag-scene { width: 220px; height: 220px; perspective: 700px; display: flex; align-items: center; justify-content: center; }
+        .mag-view { width: 110px; height: 110px; position: relative; transform-style: preserve-3d; transform: rotateX(-25deg) rotateY(-35deg); }
+        .mag-cube { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.08s linear; }
+        .mag-face { position: absolute; width: 110px; height: 110px; display: flex; align-items: center; justify-content: center;
+            font: bold 13px monospace; color: #17202b; border: 2px solid #2a5aa6; background: #e4edfa; box-sizing: border-box; backface-visibility: hidden; }
+        .mag-front { transform: rotateY(180deg) translateZ(55px); background: #ffd666; }
+        .mag-back { transform: translateZ(55px); }
+        .mag-left { transform: rotateY(-90deg) translateZ(55px); }
+        .mag-right { transform: rotateY(90deg) translateZ(55px); }
+        .mag-top { transform: rotateX(90deg) translateZ(55px) rotate(180deg); background: #a8dcb2; }
+        .mag-bottom { transform: rotateX(-90deg) translateZ(55px); }
+        .mag-info { flex: 1; min-width: 280px; }
+        .mag-status { font-weight: bold; margin-bottom: 6px; }
+        .kv { border-collapse: collapse; font-family: monospace; font-size: 13px; margin-bottom: 8px; }
+        .kv th { text-align: left; font-weight: normal; color: #555; padding: 2px 12px 2px 0; }
+        .kv td { padding: 2px 0; }
+        .hint { font-family: monospace; font-size: 12px; color: #666; margin-left: 8px; }
+        .gps-grid { display: flex; flex-wrap: wrap; gap: 24px; }
+        .sat-table { border-collapse: collapse; font-family: monospace; font-size: 13px; margin-top: 8px; }
+        .sat-table th, .sat-table td { border-bottom: 1px solid #e6e6e6; padding: 3px 10px; text-align: left; }
+        .snr-bar { display: inline-block; height: 8px; background: #1f5fbf; vertical-align: middle; margin-right: 6px; }
+    </style>
 </head>
 
 <body>
@@ -143,6 +168,70 @@
         <div id="distance-info" style="margin-top: 6px; font-family: monospace; font-size: 13px; color: #555;">
             Нет данных
         </div>
+    </div>
+
+    <h3>Magnetometer (QMC5883P)</h3>
+    <div class="mag-panel">
+        <div class="mag-scene">
+            <div class="mag-view">
+                <div class="mag-cube" id="mag-cube">
+                    <div class="mag-face mag-front">ПЕРЕД</div>
+                    <div class="mag-face mag-back">ЗАД</div>
+                    <div class="mag-face mag-left">ЛЕВО</div>
+                    <div class="mag-face mag-right">ПРАВО</div>
+                    <div class="mag-face mag-top">ВЕРХ</div>
+                    <div class="mag-face mag-bottom">НИЗ</div>
+                </div>
+            </div>
+        </div>
+        <div class="mag-info">
+            <div class="mag-status" id="mag-status">Нет данных</div>
+            <table class="kv">
+                <tr><th>Курс (магнитный)</th><td id="mag-heading">--</td></tr>
+                <tr><th>Курс от центра</th><td id="mag-heading-rel">--</td></tr>
+                <tr><th>Отклонение от центра</th><td id="mag-tilt">--</td></tr>
+                <tr><th>Поле X / Y / Z</th><td id="mag-ut">--</td></tr>
+                <tr><th>Модуль поля</th><td id="mag-magnitude">--</td></tr>
+                <tr><th>Сырые X / Y / Z</th><td id="mag-raw">--</td></tr>
+                <tr><th>Частота</th><td id="mag-rate">--</td></tr>
+            </table>
+            <button onclick="centerMagnetometer()">Центрировать</button>
+            <span id="mag-center-info" class="hint"></span>
+        </div>
+    </div>
+
+    <h3>GPS (NEO-6M)</h3>
+    <div class="gps-panel">
+        <div style="margin-bottom: 10px;">
+            <button onclick="requestGps()" id="gps-refresh">Запросить сейчас</button>
+            <span id="gps-updated" class="hint">ещё не опрашивался</span>
+        </div>
+        <div class="gps-grid">
+            <table class="kv">
+                <tr><th>Модуль</th><td id="gps-alive">--</td></tr>
+                <tr><th>Фикс</th><td id="gps-fix">--</td></tr>
+                <tr><th>Широта</th><td id="gps-lat">--</td></tr>
+                <tr><th>Долгота</th><td id="gps-lon">--</td></tr>
+                <tr><th>Карта</th><td id="gps-map">--</td></tr>
+                <tr><th>Высота (над уровнем моря)</th><td id="gps-alt">--</td></tr>
+                <tr><th>Высота геоида</th><td id="gps-geoid">--</td></tr>
+                <tr><th>Скорость</th><td id="gps-speed">--</td></tr>
+                <tr><th>Курс движения</th><td id="gps-course">--</td></tr>
+            </table>
+            <table class="kv">
+                <tr><th>Дата / время UTC</th><td id="gps-time">--</td></tr>
+                <tr><th>Спутники в решении / видно</th><td id="gps-sats">--</td></tr>
+                <tr><th>HDOP / PDOP / VDOP</th><td id="gps-dop">--</td></tr>
+                <tr><th>Качество фикса (GGA)</th><td id="gps-quality">--</td></tr>
+                <tr><th>Возраст фикса</th><td id="gps-fix-age">--</td></tr>
+                <tr><th>Последнее NMEA</th><td id="gps-sentence-age">--</td></tr>
+                <tr><th>NMEA принято / ошибок CRC</th><td id="gps-counters">--</td></tr>
+            </table>
+        </div>
+        <table class="sat-table">
+            <thead><tr><th>PRN</th><th>Возвышение</th><th>Азимут</th><th>Сигнал (SNR)</th></tr></thead>
+            <tbody id="gps-satellites"><tr><td colspan="4">Нет данных о спутниках</td></tr></tbody>
+        </table>
     </div>
 
     <h3>Commands</h3>

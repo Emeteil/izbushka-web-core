@@ -1,7 +1,8 @@
 from contextlib import asynccontextmanager
 import asyncio
 from settings import com_link_connection, com_link_commands, transport_bus
-from services.sensor_service import format_distance
+from services.sensor_service import format_distance, format_magnetometer
+from api.websockets import broadcast_gps
 from utils.connection_manager import manager
 import api.voice_broadcast
 import api.voice_link
@@ -68,7 +69,19 @@ async def lifespan(app):
                 loop
             )
 
-    sensor_callbacks = {"millis": on_millis_data, "distance": on_distance_data}
+    def on_magnetometer_data(data):
+        payload = format_magnetometer(data)
+        if payload is not None and loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                manager.broadcast({"event": "sensor.data", "data": {"magnetometer": payload}}),
+                loop
+            )
+
+    sensor_callbacks = {
+        "millis": on_millis_data,
+        "distance": on_distance_data,
+        "magnetometer": on_magnetometer_data,
+    }
 
     if com_link_connection and com_link_commands:
         for name, callback in sensor_callbacks.items():
@@ -85,7 +98,20 @@ async def lifespan(app):
                 except Exception as e:
                     print(f"Failed to subscribe to {name} via virtual link: {e}")
 
+    async def poll_gps():
+        interval = float(settings.get("gps_poll_interval_s", 5))
+        while True:
+            try:
+                await broadcast_gps()
+            except Exception as e:
+                print(f"GPS poll failed: {e}")
+            await asyncio.sleep(interval)
+
+    gps_task = asyncio.create_task(poll_gps())
+
     yield
+
+    gps_task.cancel()
 
     if com_link_connection:
         try:

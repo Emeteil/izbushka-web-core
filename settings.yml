@@ -2,6 +2,7 @@ host: "0.0.0.0"
 port: 80
 
 com_link_rt_port: null
+gps_poll_interval_s: 5
 
 webcam:
   device: 0
