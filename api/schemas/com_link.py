@@ -6,6 +6,16 @@ class MillisResponse(BaseModel):
     millis: int = Field(..., description="Миллисекунды с момента старта робота")
 
 
+class DistanceSensor(BaseModel):
+    mm: Optional[int] = Field(None, description="Расстояние в миллиметрах, null если замера нет")
+    status: str = Field(..., description="ok - замер есть, far - эхо не вернулось в пределах дальности, "
+                                         "error - датчик не ответил или ещё не измерялся")
+
+
+class DistanceResponse(BaseModel):
+    sensors: list[DistanceSensor] = Field(..., description="Датчики HC-SR04, индекс = номер датчика (канал Cn)")
+
+
 class CommandSuccessResponse(BaseModel):
     command: str = Field(..., description="Выполненная команда")
     success: bool = Field(..., description="True, если команда выполнена успешно")

@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 import asyncio
 from settings import com_link_connection, com_link_commands, transport_bus
+from services.sensor_service import format_distance
 from utils.connection_manager import manager
 import api.voice_broadcast
 import api.voice_link
@@ -59,18 +60,30 @@ async def lifespan(app):
                     loop
                 )
 
+    def on_distance_data(values):
+        payload = format_distance(values)
+        if payload is not None and loop.is_running():
+            asyncio.run_coroutine_threadsafe(
+                manager.broadcast({"event": "sensor.data", "data": {"distance": payload}}),
+                loop
+            )
+
+    sensor_callbacks = {"millis": on_millis_data, "distance": on_distance_data}
+
     if com_link_connection and com_link_commands:
-        try:
-            com_link_commands['millis'].subscribe(on_millis_data)
-        except Exception as e:
-            print(f"Failed to subscribe to sensors: {e}")
+        for name, callback in sensor_callbacks.items():
+            try:
+                com_link_commands[name].subscribe(callback)
+            except Exception as e:
+                print(f"Failed to subscribe to {name}: {e}")
     else:
         vl = transport_bus.get("virtual_link")
         if vl and hasattr(vl, 'subscribe'):
-            try:
-                vl.subscribe("millis", on_millis_data)
-            except Exception as e:
-                print(f"Failed to subscribe via virtual link: {e}")
+            for name, callback in sensor_callbacks.items():
+                try:
+                    vl.subscribe(name, callback)
+                except Exception as e:
+                    print(f"Failed to subscribe to {name} via virtual link: {e}")
 
     yield
 

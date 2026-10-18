@@ -1,6 +1,21 @@
 from typing import Any, Callable, Dict, Optional
 
+from com_link_rt import DistanceCommand
 from transport import TransportBus
+
+
+def format_distance(values: Any) -> Optional[dict]:
+    if not isinstance(values, (list, tuple)):
+        return None
+    sensors = []
+    for value in values:
+        if value is None or value == DistanceCommand.SENSOR_ERROR:
+            sensors.append({"mm": None, "status": "error"})
+        elif value == DistanceCommand.NO_ECHO:
+            sensors.append({"mm": None, "status": "far"})
+        else:
+            sensors.append({"mm": int(value), "status": "ok"})
+    return {"sensors": sensors}
 
 
 class SensorService:
@@ -15,9 +30,16 @@ class SensorService:
         raw = self._bus.execute("millis", "execute")
         return {"millis": raw} if raw is not None else None
 
+    def get_distance(self) -> Optional[dict]:
+        cached = self._cached_attr("distance", "last_data")
+        if cached is not None:
+            return format_distance(cached)
+        return format_distance(self._bus.execute("distance", "execute"))
+
     def get_all(self) -> Dict[str, Any]:
         getters: Dict[str, Callable[[], Optional[dict]]] = {
             "millis": self.get_millis,
+            "distance": self.get_distance,
         }
         result: Dict[str, Any] = {}
         for name, getter in getters.items():

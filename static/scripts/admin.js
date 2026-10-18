@@ -335,6 +335,123 @@ function updateSensorData(data) {
         document.getElementById('millis-display').textContent =
             `Millis: ${data.millis.millis}`;
     }
+    if (data.distance && Array.isArray(data.distance.sensors)) {
+        updateDistance(data.distance.sensors);
+    }
+}
+
+const DISTANCE_MAX_MM = 4000;
+const DISTANCE_SENSOR_COUNT = 8;
+let distanceSensors = [];
+let distanceArrivals = [];
+
+function updateDistance(sensors) {
+    distanceSensors = sensors;
+    const now = performance.now();
+    distanceArrivals.push(now);
+    distanceArrivals = distanceArrivals.filter(t => now - t <= 3000);
+
+    const span = (distanceArrivals[distanceArrivals.length - 1] - distanceArrivals[0]) / 1000;
+    const rate = span > 0 ? ((distanceArrivals.length - 1) / span).toFixed(1) : '--';
+    const ok = sensors.filter(s => s.status === 'ok').length;
+    document.getElementById('distance-info').textContent =
+        `${rate} Гц · ${ok}/${sensors.length} датчиков с замером · обновлено ${new Date().toLocaleTimeString()}`;
+
+    drawDistanceStem();
+}
+
+function initCharts() {
+    drawDistanceStem();
+    window.addEventListener('resize', drawDistanceStem);
+}
+
+function drawDistanceStem() {
+    const canvas = document.getElementById('distance-stem');
+    const dpr = window.devicePixelRatio || 1;
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, width, height);
+    ctx.font = '12px monospace';
+
+    const pad = { left: 56, right: 12, top: 22, bottom: 30 };
+    const plotW = width - pad.left - pad.right;
+    const plotH = height - pad.top - pad.bottom;
+    const baseY = pad.top + plotH;
+    const yOf = mm => baseY - (Math.min(mm, DISTANCE_MAX_MM) / DISTANCE_MAX_MM) * plotH;
+
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    for (let mm = 0; mm <= DISTANCE_MAX_MM; mm += 500) {
+        const y = yOf(mm);
+        ctx.strokeStyle = mm === 0 ? '#888' : '#e6e6e6';
+        ctx.beginPath();
+        ctx.moveTo(pad.left, y);
+        ctx.lineTo(pad.left + plotW, y);
+        ctx.stroke();
+        ctx.fillStyle = '#666';
+        ctx.fillText(`${mm} мм`, pad.left - 6, y);
+    }
+
+    const count = Math.max(distanceSensors.length, DISTANCE_SENSOR_COUNT);
+    for (let i = 0; i < count; i++) {
+        const x = pad.left + (i + 0.5) * plotW / count;
+        const sensor = distanceSensors[i] || { mm: null, status: 'none' };
+
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillStyle = '#333';
+        ctx.fillText(`#${i}`, x, baseY + 8);
+        ctx.textBaseline = 'bottom';
+
+        if (sensor.status === 'ok') {
+            const y = yOf(sensor.mm);
+            ctx.strokeStyle = '#1f5fbf';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.fillStyle = '#1f5fbf';
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.fill();
+            ctx.fillStyle = '#17202b';
+            ctx.fillText(`${sensor.mm}`, x, y - 8);
+        } else if (sensor.status === 'far') {
+            const y = yOf(DISTANCE_MAX_MM);
+            ctx.strokeStyle = '#9aa5b4';
+            ctx.lineWidth = 1.5;
+            ctx.setLineDash([4, 4]);
+            ctx.beginPath();
+            ctx.moveTo(x, baseY);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, 2 * Math.PI);
+            ctx.stroke();
+            ctx.fillStyle = '#5b6676';
+            ctx.fillText('нет эха', x, y - 8);
+        } else {
+            const color = sensor.status === 'error' ? '#d43a2f' : '#bbb';
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(x - 5, baseY - 11);
+            ctx.lineTo(x + 5, baseY - 1);
+            ctx.moveTo(x + 5, baseY - 11);
+            ctx.lineTo(x - 5, baseY - 1);
+            ctx.stroke();
+            ctx.fillStyle = color;
+            ctx.fillText(sensor.status === 'error' ? 'ошибка' : '--', x, baseY - 14);
+        }
+        ctx.lineWidth = 1;
+    }
 }
 
 function sendMotorCommand(command) {

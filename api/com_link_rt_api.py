@@ -3,7 +3,7 @@ from authorization import login_required
 from utils.api_response import apiResponse, ApiError
 from settings import app, com_link_connection, settings, transport_bus, sensor_service
 from api.schemas.com_link import (
-    MillisResponse, CommandSuccessResponse,
+    DistanceResponse, MillisResponse, CommandSuccessResponse,
     ConnectionStatusResponse, MotorsSpeedRequest, MotorsDirectionRequest,
     MotorsMoveRequest, MotorsStopRequest
 )
@@ -33,6 +33,17 @@ def _require_sensor(payload, label: str):
 async def get_millis(payload: dict = login_required()):
     _check_bus()
     return apiResponse(_require_sensor(sensor_service.get_millis(), "Millis"))
+
+
+@router.get("/sensors/distance",
+            response_model=DistanceResponse,
+            summary="Получить расстояния с дальномеров (в мм)",
+            description="Последние значения со всех ультразвуковых датчиков. "
+                        "При активной подписке берутся из кэша, обновляемого ~4 раза в секунду."
+            )
+async def get_distance(payload: dict = login_required()):
+    _check_bus()
+    return apiResponse(_require_sensor(sensor_service.get_distance(), "Distance"))
 
 
 @router.post("/ping",
