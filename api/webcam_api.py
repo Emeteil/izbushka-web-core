@@ -3,6 +3,7 @@ from fastapi.responses import Response, StreamingResponse
 from authorization import login_required
 from utils.api_response import apiResponse
 import cv2
+import asyncio
 import threading
 import atexit
 import time
@@ -135,7 +136,7 @@ def capture_frames():
     cap.release()
 
 
-def generate_frames():
+async def generate_frames():
     last_yield_time = time.time()
     frames_dropped = 0
 
@@ -146,26 +147,23 @@ def generate_frames():
         elapsed_since_last = current_time - last_yield_time
         if elapsed_since_last < target_interval:
             sleep_time = target_interval - elapsed_since_last
-            time.sleep(max(0.001, sleep_time))
+            await asyncio.sleep(max(0.001, sleep_time))
             continue
 
         with frame_lock:
-            if current_frame_bytes is None:
-                time.sleep(0.01)
-                continue
-
-            frame_age = current_time - last_frame_time
-            if frame_age > 0.5:
-                time.sleep(0.01)
-                continue
-
             frame_data = current_frame_bytes
+            frame_age = current_time - last_frame_time
+
+        if frame_data is None or frame_age > 0.5:
+            await asyncio.sleep(0.01)
+            continue
 
         if video_quality["auto_adjust"]:
             avg_interval = np.mean(frame_stats["stream_intervals"][-5:]
                                    ) if len(frame_stats["stream_intervals"]) >= 5 else target_interval
             if avg_interval > target_interval * 1.5:
                 frames_dropped += 1
+                await asyncio.sleep(target_interval)
                 continue
 
         yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n'
