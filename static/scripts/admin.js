@@ -77,8 +77,8 @@ function updateStatsDisplay(stats, quality) {
         <hr>
         <div><strong>Capture Time:</strong> ${(stats.avg_capture_time * 1000).toFixed(2)} ms</div>
         <div><strong>Encode Time:</strong> ${(stats.avg_encode_time * 1000).toFixed(2)} ms</div>
-        <div><strong>Stream Interval:</strong> ${(stats.avg_stream_interval * 1000).toFixed(2)} ms</div>
-        <div><strong>Actual FPS:</strong> ${stats.avg_stream_interval ? (1 / stats.avg_stream_interval).toFixed(1) : 'null'}</div>
+        <div><strong>Capture Interval:</strong> ${(stats.avg_stream_interval * 1000).toFixed(2)} ms</div>
+        <div><strong>Capture FPS:</strong> ${stats.avg_stream_interval ? (1 / stats.avg_stream_interval).toFixed(1) : 'null'}</div>
     `;
 
     statsDiv.innerHTML = html;
@@ -159,7 +159,7 @@ async function getWebcamStatus() {
                 statusText += ` | FPS: ${status.actual_fps.toFixed(1)}`;
             }
 
-            statusSpan.textContent = statusText;
+            statusDiv.textContent = statusText;
             showMessage('Webcam status updated', 'green');
         }
     } catch (error) {
@@ -738,79 +738,44 @@ function showMessage(message, color = 'green') {
 }
 
 let webcamStreamActive = false;
+let webcamPlayer = null;
 
 function startWebcamStream() {
     if (webcamStreamActive) return;
-
-    const streamImg = document.getElementById('webcam-stream');
-    const loadingDiv = document.getElementById('webcam-loading');
-    const errorDiv = document.getElementById('webcam-error');
-    const statusSpan = document.getElementById('webcam-status');
-    const startBtn = document.getElementById('start-webcam-btn');
-    const stopBtn = document.getElementById('stop-webcam-btn');
-
     try {
         const token = getToken();
-        const streamUrl = `/api/webcam/stream?token=${encodeURIComponent(token)}`;
-
-        streamImg.style.display = 'none';
-        loadingDiv.style.display = 'flex';
-        errorDiv.style.display = 'none';
-        statusSpan.textContent = 'Status: Connecting...';
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-
-        streamImg.src = streamUrl;
-        streamImg.onload = function () {
-            loadingDiv.style.display = 'none';
-            streamImg.style.display = 'block';
-            statusSpan.textContent = 'Status: Streaming';
-            webcamStreamActive = true;
-            showMessage('Webcam stream started', 'green');
-        };
-
-        streamImg.onerror = function () {
-            loadingDiv.style.display = 'none';
-            errorDiv.style.display = 'flex';
-            statusSpan.textContent = 'Status: Error';
-            startBtn.disabled = false;
-            stopBtn.disabled = true;
-            webcamStreamActive = false;
-            showMessage('Failed to start webcam stream', 'red');
-        };
-
+        webcamPlayer = new WebcamPlayer({
+            image: document.getElementById('webcam-stream'),
+            token,
+            onState(state) {
+                document.getElementById('webcam-stream').style.display = state === 'playing' ? 'block' : 'none';
+                document.getElementById('webcam-loading').style.display = state === 'connecting' ? 'flex' : 'none';
+                document.getElementById('webcam-error').style.display = state === 'retrying' ? 'flex' : 'none';
+                document.getElementById('webcam-status').textContent = `Status: ${state}`;
+            },
+        });
+        webcamStreamActive = true;
+        document.getElementById('start-webcam-btn').disabled = true;
+        document.getElementById('stop-webcam-btn').disabled = false;
+        webcamPlayer.start();
     } catch (error) {
-        loadingDiv.style.display = 'none';
-        errorDiv.style.display = 'flex';
-        statusSpan.textContent = 'Status: Error';
-        startBtn.disabled = false;
-        stopBtn.disabled = true;
-        webcamStreamActive = false;
         showMessage(`Webcam error: ${error.message}`, 'red');
     }
 }
 
 function stopWebcamStream() {
-    if (!webcamStreamActive) return;
-
-    const streamImg = document.getElementById('webcam-stream');
-    const loadingDiv = document.getElementById('webcam-loading');
-    const errorDiv = document.getElementById('webcam-error');
-    const statusSpan = document.getElementById('webcam-status');
-    const startBtn = document.getElementById('start-webcam-btn');
-    const stopBtn = document.getElementById('stop-webcam-btn');
-
-    streamImg.src = '';
-    streamImg.style.display = 'none';
-    loadingDiv.style.display = 'none';
-    errorDiv.style.display = 'none';
-    statusSpan.textContent = 'Status: Stopped';
-    startBtn.disabled = false;
-    stopBtn.disabled = true;
+    if (webcamPlayer) webcamPlayer.stop();
+    webcamPlayer = null;
     webcamStreamActive = false;
-
-    showMessage('Webcam stream stopped', 'green');
+    document.getElementById('webcam-stream').style.display = 'none';
+    document.getElementById('webcam-loading').style.display = 'none';
+    document.getElementById('webcam-error').style.display = 'none';
+    document.getElementById('webcam-status').textContent = 'Status: Stopped';
+    document.getElementById('start-webcam-btn').disabled = false;
+    document.getElementById('stop-webcam-btn').disabled = true;
 }
+
+window.addEventListener('pagehide', stopWebcamStream);
 
 function renderWakeWord(enabled) {
     const toggle = document.getElementById('wakeword-toggle');

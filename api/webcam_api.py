@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from authorization import login_required
 from utils.api_response import apiResponse
@@ -15,6 +15,8 @@ router = APIRouter(prefix="/api/webcam", tags=["Webcam"])
 
 current_frame = None
 current_frame_bytes = None
+frame_sequence = 0
+frame_quality = 30
 last_frame_time = 0
 frame_lock = threading.Lock()
 capture_thread = None
@@ -25,10 +27,10 @@ video_quality = {
     "width": 640,
     "height": 480,
     "fps": 23,
-    "auto_adjust": False,
+    "auto_adjust": True,
     "min_quality": 1,
     "max_quality": 95,
-    "network_adaptation": False
+    "network_adaptation": True
 }
 
 frame_stats = {
@@ -43,33 +45,36 @@ frame_stats = {
 encode_params = [cv2.IMWRITE_JPEG_OPTIMIZE, 1]
 
 
-def calculate_adaptive_quality(network_delay):
-    if not video_quality["network_adaptation"]:
-        return video_quality["quality"]
-
-    base_delay = 0.1
-    max_delay = 1.0
-
-    if network_delay <= base_delay:
-        return video_quality["max_quality"]
-    elif network_delay >= max_delay:
-        return video_quality["min_quality"]
-    else:
-        ratio = (network_delay - base_delay) / (max_delay - base_delay)
-        quality = video_quality["max_quality"] - ratio * (video_quality["max_quality"] - video_quality["min_quality"])
-        return max(video_quality["min_quality"], min(video_quality["max_quality"], int(quality)))
+def publish_frame(frame_bytes, frame=None, quality=None):
+    global current_frame, current_frame_bytes, last_frame_time, frame_sequence, frame_quality
+    now = time.time()
+    with frame_lock:
+        if last_frame_time and now > last_frame_time:
+            frame_stats["stream_intervals"].append(now - last_frame_time)
+            frame_stats["stream_intervals"] = frame_stats["stream_intervals"][-100:]
+        current_frame = frame
+        current_frame_bytes = frame_bytes
+        last_frame_time = now
+        frame_sequence += 1
+        frame_quality = quality
 
 
 def _inject_virtual_frame(frame_bytes: bytes):
-    global current_frame_bytes, last_frame_time
-    with frame_lock:
-        current_frame_bytes = frame_bytes
-        last_frame_time = time.time()
+    publish_frame(frame_bytes)
+
+
+def encode_snapshot(frame, frame_bytes, quality):
+    if frame is None:
+        frame = cv2.imdecode(np.frombuffer(frame_bytes, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if frame is None:
+        raise HTTPException(status_code=503, detail="invalid camera frame")
+    success, buffer = cv2.imencode('.jpg', frame, encode_params + [cv2.IMWRITE_JPEG_QUALITY, quality])
+    if not success:
+        raise HTTPException(status_code=503, detail="camera encoding failed")
+    return buffer.tobytes()
 
 
 def capture_frames():
-    global current_frame_bytes, last_frame_time
-
     vl_in_bus = transport_bus.get("virtual_link") is not None
     is_virtual = vl_in_bus and settings.get("transport", {}).get("virtual_link", {}).get("virtual_camera", False)
     if is_virtual:
@@ -80,7 +85,8 @@ def capture_frames():
     dev = settings.get("webcam", {}).get("device", 0)
     cap = cv2.VideoCapture(dev, cv2.CAP_V4L2) if isinstance(dev, str) else cv2.VideoCapture(dev)
 
-    cap.set(cv2.CAP_PROP_FPS, video_quality["fps"])
+    capture_fps = video_quality["fps"]
+    cap.set(cv2.CAP_PROP_FPS, capture_fps)
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, video_quality["width"])
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, video_quality["height"])
     cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
@@ -89,59 +95,53 @@ def capture_frames():
         print("Error: Could not open webcam")
         return
 
-    target_frame_time = 1.0 / video_quality["fps"]
-    last_capture_time = time.time()
-
     while not stop_capture:
-        start_time = time.time()
+        start_time = time.monotonic()
+        frame_settings = video_quality.copy()
+        target_frame_time = 1.0 / frame_settings["fps"]
+        if capture_fps != frame_settings["fps"]:
+            capture_fps = frame_settings["fps"]
+            cap.set(cv2.CAP_PROP_FPS, capture_fps)
 
         ret, frame = cap.read()
         if not ret:
             time.sleep(0.01)
             continue
 
-        if video_quality["width"] and video_quality["height"]:
-            frame = cv2.resize(frame, (video_quality["width"], video_quality["height"]))
+        if frame_settings["width"] and frame_settings["height"]:
+            frame = cv2.resize(frame, (frame_settings["width"], frame_settings["height"]))
 
-        encode_start = time.time()
+        encode_start = time.monotonic()
 
-        current_quality = video_quality["quality"]
-        if video_quality["auto_adjust"] and len(frame_stats["stream_intervals"]) > 5:
-            avg_interval = np.mean(frame_stats["stream_intervals"][-5:])
-            current_quality = calculate_adaptive_quality(avg_interval - target_frame_time)
-
+        current_quality = frame_settings["quality"]
         encode_params_with_quality = encode_params + [cv2.IMWRITE_JPEG_QUALITY, int(current_quality)]
 
         ret, buffer = cv2.imencode('.jpg', frame, encode_params_with_quality)
-        encode_time = time.time() - encode_start
+        encode_time = time.monotonic() - encode_start
 
         if ret:
-            with frame_lock:
-                current_frame_bytes = buffer.tobytes()
-                last_frame_time = time.time()
+            publish_frame(buffer.tobytes(), frame, current_quality)
 
-        frame_stats["capture_times"].append(time.time() - start_time)
+        frame_stats["capture_times"].append(time.monotonic() - start_time)
         frame_stats["encode_times"].append(encode_time)
         if len(frame_stats["capture_times"]) > 100:
             frame_stats["capture_times"] = frame_stats["capture_times"][-100:]
             frame_stats["encode_times"] = frame_stats["encode_times"][-100:]
 
-        elapsed = time.time() - last_capture_time
+        elapsed = time.monotonic() - start_time
         sleep_time = max(0, target_frame_time - elapsed)
         if sleep_time > 0:
             time.sleep(sleep_time)
-
-        last_capture_time = time.time()
 
     cap.release()
 
 
 async def generate_frames():
-    last_yield_time = time.time()
-    frames_dropped = 0
+    last_yield_time = 0
+    last_sequence = -1
 
     while True:
-        current_time = time.time()
+        current_time = time.monotonic()
         target_interval = 1.0 / video_quality["fps"]
 
         elapsed_since_last = current_time - last_yield_time
@@ -152,48 +152,16 @@ async def generate_frames():
 
         with frame_lock:
             frame_data = current_frame_bytes
-            frame_age = current_time - last_frame_time
+            frame_age = time.time() - last_frame_time
+            sequence = frame_sequence
 
-        if frame_data is None or frame_age > 0.5:
+        if frame_data is None or frame_age > 0.5 or sequence == last_sequence:
             await asyncio.sleep(0.01)
             continue
 
-        if video_quality["auto_adjust"]:
-            avg_interval = np.mean(frame_stats["stream_intervals"][-5:]
-                                   ) if len(frame_stats["stream_intervals"]) >= 5 else target_interval
-            if avg_interval > target_interval * 1.5:
-                frames_dropped += 1
-                await asyncio.sleep(target_interval)
-                continue
-
+        last_sequence = sequence
+        last_yield_time = current_time
         yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n'
-
-        now = time.time()
-        frame_interval = now - last_yield_time
-        frame_stats["stream_intervals"].append(frame_interval)
-        if len(frame_stats["stream_intervals"]) > 100:
-            frame_stats["stream_intervals"] = frame_stats["stream_intervals"][-100:]
-
-        last_yield_time = now
-
-        current_time = time.time()
-        if video_quality["auto_adjust"] and current_time - \
-                frame_stats["last_adjustment"] > frame_stats["adjustment_interval"]:
-            if len(frame_stats["stream_intervals"]) >= 10:
-                avg_interval = np.mean(frame_stats["stream_intervals"])
-
-                if avg_interval > target_interval * 1.2:
-                    video_quality["quality"] = max(
-                        video_quality["min_quality"],
-                        video_quality["quality"] - 5
-                    )
-                elif avg_interval < target_interval * 0.8 and video_quality["quality"] < video_quality["max_quality"]:
-                    video_quality["quality"] = min(
-                        video_quality["max_quality"],
-                        video_quality["quality"] + 5
-                    )
-
-            frame_stats["last_adjustment"] = current_time
 
 
 def start_webcam_capture():
@@ -232,20 +200,43 @@ if is_virtual_camera:
                         "Требует авторизации (через параметр токена)."
             )
 async def webcam_stream(payload: dict = login_required("args")):
-    return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame')
+    return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame',
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
 
 
 @router.get("/snapshot",
             summary="Получить один кадр с камеры",
-            description="Возвращает последний захваченный кадр как одиночный JPEG (не поток). "
+            description="Возвращает свежий JPEG. quality ограничивает качество только этого запроса; "
+                        "after с номером текущего кадра возвращает 204, пока новый кадр не захвачен. "
                         "Требует авторизации (через параметр токена)."
             )
-async def webcam_snapshot(payload: dict = login_required("args")):
+async def webcam_snapshot(payload: dict = login_required("args"),
+                          quality: int = Query(None, ge=1, le=95), after: int = Query(None, ge=0)):
     with frame_lock:
         frame_data = current_frame_bytes
+        frame = current_frame
+        sequence = frame_sequence
+        age = time.time() - last_frame_time
+        source_quality = frame_quality
     if frame_data is None:
         raise HTTPException(status_code=404, detail="no frame available yet")
-    return Response(content=frame_data, media_type="image/jpeg")
+    if age > 0.5:
+        raise HTTPException(status_code=503, detail="camera frame is stale")
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Frame-Sequence": str(sequence),
+        "X-Webcam-Quality": str(video_quality["quality"]),
+        "X-Webcam-Fps": str(video_quality["fps"]),
+        "X-Webcam-Auto": str(int(video_quality["auto_adjust"])),
+        "X-Webcam-Network": str(int(video_quality["network_adaptation"])),
+    }
+    if after == sequence:
+        return Response(status_code=204, headers=headers)
+    if quality is not None:
+        quality = max(video_quality["min_quality"], min(video_quality["quality"], quality))
+        if quality != source_quality:
+            frame_data = await asyncio.to_thread(encode_snapshot, frame, frame_data, quality)
+    return Response(content=frame_data, media_type="image/jpeg", headers=headers)
 
 
 @router.get("/status",
@@ -288,12 +279,10 @@ async def get_webcam_quality(payload: dict = login_required()):
 @router.put("/quality",
             response_model=WebcamQualityResponse,
             summary="Установить настройки качества камеры",
-            description="Позволяет изменить настройки видеопотока (качество, разрешение, FPS, автоподстройку). "
-                        "При некоторых изменениях (особенно FPS) возможен перезапуск захвата кадра."
+            description="Изменяет качество, разрешение и FPS без перезапуска захвата. "
+                        "Автоподстройка JPEG и FPS выполняется отдельно в каждом браузере."
             )
 async def set_webcam_quality(req: WebcamQualityRequest, payload: dict = login_required()):
-    restart_required = False
-
     if req.quality is not None:
         video_quality["quality"] = max(video_quality["min_quality"], min(video_quality["max_quality"], req.quality))
 
@@ -306,7 +295,6 @@ async def set_webcam_quality(req: WebcamQualityRequest, payload: dict = login_re
     if req.fps is not None:
         video_quality["fps"] = max(1, min(60, req.fps))
         frame_stats["target_fps"] = video_quality["fps"]
-        restart_required = True
 
     if req.auto_adjust is not None:
         video_quality["auto_adjust"] = req.auto_adjust
@@ -319,12 +307,9 @@ async def set_webcam_quality(req: WebcamQualityRequest, payload: dict = login_re
             if isinstance(frame_stats[key], list):
                 frame_stats[key] = []
 
-    if restart_required:
-        restart_webcam_capture()
-
     return apiResponse({
         "quality": video_quality,
-        "message": "Video quality settings updated" + (" and capture restarted" if restart_required else "")
+        "message": "Video quality settings updated"
     })
 
 

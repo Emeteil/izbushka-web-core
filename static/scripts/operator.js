@@ -419,70 +419,23 @@ function setWakeword(enabled) {
         if (heldKeys.size === 0) motors.stop();
     });
 
-    let streamController = null;
-    let streamWatchdog = null;
-    let lastBlobUrl = null;
-
-    async function startVideo() {
-        if (streamController) streamController.abort();
-        streamController = new AbortController();
-        if (streamWatchdog) clearInterval(streamWatchdog);
-
-        let lastPacket = Date.now();
-        streamWatchdog = setInterval(() => {
-            if (Date.now() - lastPacket > 3000) {
-                if (streamController) streamController.abort();
+    const webcamPlayer = new WebcamPlayer({
+        image: els.video,
+        token,
+        onState(state) {
+            els.videoStatus.style.display = state === 'playing' ? 'none' : '';
+            if (state !== 'playing') {
+                els.videoStatus.textContent = state === 'retrying'
+                    ? 'Видео недоступно, переподключение…' : 'Подключение камеры…';
             }
-        }, 1000);
+        },
+    });
 
-        try {
-            const res = await fetch(`/api/webcam/stream?token=${encodeURIComponent(token)}`, {
-                signal: streamController.signal,
-            });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            els.videoStatus.style.display = 'none';
-
-            const reader = res.body.getReader();
-            let buffer = new Uint8Array(0);
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                lastPacket = Date.now();
-
-                const next = new Uint8Array(buffer.length + value.length);
-                next.set(buffer);
-                next.set(value, buffer.length);
-                buffer = next;
-
-                let lastEOI = -1;
-                for (let i = buffer.length - 2; i >= 0; i--) {
-                    if (buffer[i] === 0xFF && buffer[i + 1] === 0xD9) { lastEOI = i; break; }
-                }
-                if (lastEOI === -1) continue;
-
-                let lastSOI = -1;
-                for (let i = lastEOI - 2; i >= 0; i--) {
-                    if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8) { lastSOI = i; break; }
-                }
-                if (lastSOI === -1) continue;
-
-                const blob = new Blob([buffer.slice(lastSOI, lastEOI + 2)], { type: 'image/jpeg' });
-                const url = URL.createObjectURL(blob);
-                els.video.src = url;
-                if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
-                lastBlobUrl = url;
-
-                buffer = buffer.slice(lastEOI + 2);
-                if (buffer.length > 5_000_000) buffer = new Uint8Array(0);
-            }
-        } catch (err) {
-            if (err.name === 'AbortError') return;
-            els.videoStatus.textContent = 'Видео недоступно, переподключение…';
-            els.videoStatus.style.display = '';
-            setTimeout(startVideo, 1500);
-        }
+    function startVideo() {
+        webcamPlayer.start();
     }
+
+    window.addEventListener('pagehide', () => webcamPlayer.stop());
 
     els.btnReloadVideo.addEventListener('click', () => {
         els.videoStatus.textContent = 'Перезапуск потока…';

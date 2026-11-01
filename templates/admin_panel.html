@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <title>Admin Panel</title>
     <script src="/static/scripts/socketio_mock.js"></script>
+    <script src="/static/scripts/webcam.js" defer></script>
     <script src="/static/scripts/admin.js" defer></script>
     <style>
         .mag-panel, .gps-panel { max-width: 760px; margin-bottom: 20px; padding: 10px; border: 1px solid #ccc; }
@@ -42,9 +43,9 @@
             <div>
                 <h3>Video Quality</h3>
                 <div style="margin-bottom: 10px;">
-                    <label>Quality (1-100):</label>
-                    <input type="range" id="quality-slider" min="5" max="95" value="85">
-                    <span id="quality-value">85</span>
+                    <label>Quality (1-95):</label>
+                    <input type="range" id="quality-slider" min="1" max="95" value="30">
+                    <span id="quality-value">30</span>
                 </div>
 
                 <div style="margin-bottom: 10px;">
@@ -76,7 +77,8 @@
                         <option value="10">10 FPS</option>
                         <option value="15">15 FPS</option>
                         <option value="20">20 FPS</option>
-                        <option value="30" selected>30 FPS</option>
+                        <option value="23" selected>23 FPS</option>
+                        <option value="30">30 FPS</option>
                         <option value="60">60 FPS</option>
                     </select>
                 </div>
@@ -84,14 +86,14 @@
                 <div style="margin-bottom: 10px;">
                     <label>
                         <input type="checkbox" id="auto-adjust" checked>
-                        Auto Adjust Quality
+                        Auto Adjust JPEG per Viewer
                     </label>
                 </div>
 
                 <div style="margin-bottom: 10px;">
                     <label>
                         <input type="checkbox" id="network-adaptation" checked>
-                        Network Adaptation
+                        Auto Adjust FPS per Viewer
                     </label>
                 </div>
 

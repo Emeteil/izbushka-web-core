@@ -206,95 +206,22 @@ function updateStatus(msg) {
     if (log.children.length > 5) log.lastChild.remove();
 }
 
-let streamController;
-let lastBlobUrl;
-let streamWatchdog;
+const webcamPlayer = new WebcamPlayer({
+    image: document.getElementById('video-background'),
+    token,
+    onState(state) {
+        window.videoLoaded = state === 'playing';
+        if (state === 'playing' && webcamPlayer.lastState !== state) updateStatus('VIDEO FEED ACTIVE');
+        if (state === 'retrying') updateStatus('VIDEO LOST. RETRY IN 1S...');
+        webcamPlayer.lastState = state;
+    },
+});
 
-async function initStream() {
-    if (streamController) streamController.abort();
-    streamController = new AbortController();
-
-    if (streamWatchdog) clearInterval(streamWatchdog);
-
-    const img = document.getElementById('video-background');
-
-    let lastPacketTime = Date.now();
-    streamWatchdog = setInterval(() => {
-        if (Date.now() - lastPacketTime > 3000) {
-            if (streamController) streamController.abort();
-        }
-    }, 1000);
-
-    try {
-        const response = await fetch(`/api/webcam/stream?token=${encodeURIComponent(token)}`, {
-            signal: streamController.signal
-        });
-
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        if (!response.body) throw new Error('No body');
-
-        const reader = response.body.getReader();
-        let buffer = new Uint8Array(0);
-
-        window.videoLoaded = true;
-        updateStatus('VIDEO FEED ACTIVE');
-
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-
-            lastPacketTime = Date.now();
-
-            const newBuffer = new Uint8Array(buffer.length + value.length);
-            newBuffer.set(buffer);
-            newBuffer.set(value, buffer.length);
-            buffer = newBuffer;
-
-            let lastEOI = -1;
-            for (let i = buffer.length - 2; i >= 0; i--) {
-                if (buffer[i] === 0xFF && buffer[i + 1] === 0xD9) {
-                    lastEOI = i;
-                    break;
-                }
-            }
-
-            if (lastEOI !== -1) {
-                let lastSOI = -1;
-                for (let i = lastEOI - 2; i >= 0; i--) {
-                    if (buffer[i] === 0xFF && buffer[i + 1] === 0xD8) {
-                        lastSOI = i;
-                        break;
-                    }
-                }
-
-                if (lastSOI !== -1) {
-                    const jpegData = buffer.slice(lastSOI, lastEOI + 2);
-                    const blob = new Blob([jpegData], { type: 'image/jpeg' });
-                    const url = URL.createObjectURL(blob);
-
-                    img.src = url;
-
-                    if (lastBlobUrl) URL.revokeObjectURL(lastBlobUrl);
-                    lastBlobUrl = url;
-
-                    buffer = buffer.slice(lastEOI + 2);
-                }
-            }
-
-            if (buffer.length > 5000000) buffer = new Uint8Array(0);
-        }
-
-    } catch (error) {
-        if (error.name === 'AbortError') return;
-        console.error('Stream error:', error);
-
-        if (streamWatchdog) clearInterval(streamWatchdog);
-        window.videoLoaded = true;
-        updateStatus('VIDEO LOST. RETRY IN 1S...');
-
-        setTimeout(initStream, 1000);
-    }
+function initStream() {
+    webcamPlayer.start();
 }
+
+window.addEventListener('pagehide', () => webcamPlayer.stop());
 
 const voiceChannel = new VoiceChannel({ token });
 const micBtn = document.getElementById('btn-voice-mic');
