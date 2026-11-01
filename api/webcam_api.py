@@ -8,10 +8,13 @@ import threading
 import atexit
 import time
 import numpy as np
+import secrets
+from starlette.background import BackgroundTask
 from settings import app, settings, transport_bus
-from api.schemas.webcam import WebcamStatusResponse, WebcamQualityResponse, WebcamQualityRequest
+from api.schemas.webcam import WebcamStatusResponse, WebcamQualityResponse, WebcamQualityRequest, WebcamStreamFeedback
 
 router = APIRouter(prefix="/api/webcam", tags=["Webcam"])
+stream_sessions = {}
 
 current_frame = None
 current_frame_bytes = None
@@ -136,13 +139,21 @@ def capture_frames():
     cap.release()
 
 
-async def generate_frames():
+async def generate_frames(session=None):
     last_yield_time = 0
     last_sequence = -1
 
     while True:
         current_time = time.monotonic()
-        target_interval = 1.0 / video_quality["fps"]
+        base = video_quality.copy()
+        fps = base["fps"]
+        quality = base["quality"]
+        if session:
+            if base["network_adaptation"]:
+                fps = min(fps, session.get("fps", fps))
+            if base["auto_adjust"]:
+                quality = max(base["min_quality"], min(quality, session.get("quality", quality)))
+        target_interval = 1.0 / fps
 
         elapsed_since_last = current_time - last_yield_time
         if elapsed_since_last < target_interval:
@@ -154,14 +165,40 @@ async def generate_frames():
             frame_data = current_frame_bytes
             frame_age = time.time() - last_frame_time
             sequence = frame_sequence
+            frame = current_frame
+            source_quality = frame_quality
 
         if frame_data is None or frame_age > 0.5 or sequence == last_sequence:
             await asyncio.sleep(0.01)
             continue
 
+        if quality != source_quality and (source_quality is not None or quality < base["quality"]):
+            frame_data = await asyncio.to_thread(encode_snapshot, frame, frame_data, quality)
         last_sequence = sequence
-        last_yield_time = current_time
-        yield b'--frame\r\nContent-Type: image/jpeg\r\n\r\n' + frame_data + b'\r\n'
+        last_yield_time = time.monotonic()
+        intervals = frame_stats["stream_intervals"][-10:]
+        capture_fps = min(base["fps"], 1 / max(0.001, sum(intervals) / len(intervals))) if intervals else base["fps"]
+        headers = (
+            f'--frame\r\nContent-Type: image/jpeg\r\nContent-Length: {len(frame_data)}\r\n'
+            f'X-Frame-Sequence: {sequence}\r\nX-Frame-Time: {last_yield_time:.6f}\r\n'
+            f'X-Webcam-Quality: {base["quality"]}\r\nX-Webcam-Fps: {base["fps"]}\r\n'
+            f'X-Capture-Fps: {capture_fps:.3f}\r\nX-Stream-Fps: {fps:.3f}\r\n'
+            f'X-Webcam-Auto: {int(base["auto_adjust"])}\r\n'
+            f'X-Webcam-Network: {int(base["network_adaptation"])}\r\n\r\n'
+        ).encode("ascii")
+        yield headers + frame_data + b'\r\n'
+
+
+async def generate_session_frames(stream_id):
+    try:
+        async for frame in generate_frames(stream_sessions[stream_id]):
+            yield frame
+    finally:
+        stream_sessions.pop(stream_id, None)
+
+
+def release_stream(stream_id):
+    stream_sessions.pop(stream_id, None)
 
 
 def start_webcam_capture():
@@ -200,8 +237,20 @@ if is_virtual_camera:
                         "Требует авторизации (через параметр токена)."
             )
 async def webcam_stream(payload: dict = login_required("args")):
-    return StreamingResponse(generate_frames(), media_type='multipart/x-mixed-replace; boundary=frame',
-                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no"})
+    stream_id = secrets.token_urlsafe(18)
+    stream_sessions[stream_id] = {"user_id": payload["user_id"]}
+    return StreamingResponse(generate_session_frames(stream_id), media_type='multipart/x-mixed-replace; boundary=frame',
+                             headers={"Cache-Control": "no-store", "X-Accel-Buffering": "no", "X-Stream-Id": stream_id},
+                             background=BackgroundTask(release_stream, stream_id))
+
+
+@router.post("/stream/{stream_id}/feedback")
+async def webcam_feedback(stream_id: str, req: WebcamStreamFeedback, payload: dict = login_required()):
+    session = stream_sessions.get(stream_id)
+    if session is None or session["user_id"] != payload["user_id"]:
+        raise HTTPException(status_code=404, detail="video stream not found")
+    session.update(quality=req.quality, fps=req.fps)
+    return Response(status_code=204)
 
 
 @router.get("/snapshot",

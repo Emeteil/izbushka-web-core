@@ -3,6 +3,7 @@ import asyncio
 import statistics
 import threading
 import time
+import secrets
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -10,11 +11,12 @@ import anyio
 import httpx
 import pytest
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
+from starlette.background import BackgroundTask
 from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
-from api.schemas.webcam import WebcamQualityRequest
+from api.schemas.webcam import WebcamQualityRequest, WebcamStreamFeedback
 
 
 @pytest.fixture
@@ -22,7 +24,8 @@ def stream_state():
     path = Path(__file__).resolve().parents[1] / "api" / "webcam_api.py"
     tree = ast.parse(path.read_text(encoding="utf-8"))
     functions = [node for node in tree.body if getattr(node, "name", None) in {
-        "generate_frames", "webcam_snapshot", "publish_frame",
+        "generate_frames", "webcam_snapshot", "publish_frame", "webcam_feedback", "webcam_stream",
+        "generate_session_frames", "release_stream",
     }]
     for function in functions:
         function.decorator_list = []
@@ -43,6 +46,11 @@ def stream_state():
         "HTTPException": HTTPException,
         "Query": Query,
         "login_required": lambda *_: None,
+        "secrets": secrets,
+        "stream_sessions": {},
+        "WebcamStreamFeedback": WebcamStreamFeedback,
+        "StreamingResponse": StreamingResponse,
+        "BackgroundTask": BackgroundTask,
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), str(path), "exec"), namespace)
     return namespace
@@ -87,7 +95,8 @@ async def test_new_frame_delivered_after_wait(stream_state):
         stream_state["current_frame_bytes"] = b"jpeg"
         stream_state["last_frame_time"] = time.time()
         frame = await asyncio.wait_for(task, timeout=1)
-        assert frame == b"--frame\r\nContent-Type: image/jpeg\r\n\r\njpeg\r\n"
+        assert frame.startswith(b"--frame\r\nContent-Type: image/jpeg\r\nContent-Length: 4\r\n")
+        assert frame.endswith(b"\r\n\r\njpeg\r\n")
     finally:
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
@@ -200,3 +209,60 @@ def test_invalid_camera_dimensions_are_rejected(dimensions):
 def test_existing_ultra_low_resolution_is_supported():
     request = WebcamQualityRequest(width=70, height=70)
     assert (request.width, request.height) == (70, 70)
+
+
+@pytest.mark.asyncio
+async def test_feedback_is_private_to_each_stream_and_respects_manual_mode(stream_state):
+    calls = []
+    stream_state["encode_snapshot"] = lambda frame, data, quality: calls.append(quality) or b"small"
+    stream_state["publish_frame"](b"jpeg", quality=30)
+    slow = {"quality": 10, "fps": 5}
+    fast = {"quality": 95, "fps": 60}
+    streams = [stream_state["generate_frames"](session) for session in (slow, fast)]
+    try:
+        frames = await asyncio.gather(*(anext(stream) for stream in streams))
+        assert frames[0].endswith(b"small\r\n")
+        assert b"X-Stream-Fps: 5.000" in frames[0]
+        assert frames[1].endswith(b"jpeg\r\n")
+        assert calls == [10]
+        assert stream_state["video_quality"]["quality"] == 30
+    finally:
+        for stream in streams:
+            await stream.aclose()
+    stream_state["video_quality"].update(auto_adjust=False, network_adaptation=False)
+    stream = stream_state["generate_frames"](slow)
+    try:
+        frame = await anext(stream)
+        assert frame.endswith(b"jpeg\r\n")
+        assert b"X-Stream-Fps: 1000.000" in frame
+        assert calls == [10]
+    finally:
+        await stream.aclose()
+
+
+@pytest.mark.asyncio
+async def test_session_cleanup_and_feedback_authentication(stream_state):
+    response = await stream_state["webcam_stream"]({"user_id": "alice"})
+    stream_id = response.headers["x-stream-id"]
+    request = WebcamStreamFeedback(quality=10, fps=12)
+    with pytest.raises(HTTPException) as error:
+        await stream_state["webcam_feedback"](stream_id, request, {"user_id": "bob"})
+    assert error.value.status_code == 404
+    stream_state["publish_frame"](b"first", quality=30)
+    assert (await anext(response.body_iterator)).endswith(b"first\r\n")
+    await stream_state["webcam_feedback"](stream_id, request, {"user_id": "alice"})
+    assert stream_state["stream_sessions"][stream_id]["quality"] == 10
+    stream_state["publish_frame"](b"jpeg", quality=10)
+    assert (await anext(response.body_iterator)).endswith(b"jpeg\r\n")
+    await response.body_iterator.aclose()
+    assert stream_id not in stream_state["stream_sessions"]
+    await response.background()
+    assert not stream_state["stream_sessions"]
+
+
+@pytest.mark.parametrize("values", [
+    {"quality": 0, "fps": 20}, {"quality": 10, "fps": float("nan")}, {"quality": 10, "fps": 61},
+])
+def test_feedback_rejects_invalid_parameters(values):
+    with pytest.raises(ValidationError):
+        WebcamStreamFeedback(**values)

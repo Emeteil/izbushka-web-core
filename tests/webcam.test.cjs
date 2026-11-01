@@ -1,58 +1,20 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { WebcamAdaptation, WebcamPlayer } = require('../static/scripts/webcam.js');
+const http = require('node:http');
+const { WebcamAdaptation, WebcamMultipartParser, WebcamPlayer } = require('../static/scripts/webcam.js');
 
-const base = { quality: 60, fps: 23, auto_adjust: true, network_adaptation: true };
+const base = { quality: 30, fps: 23, auto_adjust: true, network_adaptation: true };
 
-test('bandwidth drop reduces load and a stable recovery restores quality gradually', () => {
-    const adaptation = new WebcamAdaptation();
-    let now = 0;
-    const simulate = (seconds, bandwidth, latency) => {
-        const end = now + seconds * 1000;
-        let samples = 0;
-        let bytes = 0;
-        while (now < end) {
-            const target = adaptation.settings(base);
-            const size = 5000 + target.quality * 600;
-            const duration = latency + size * 8 / bandwidth;
-            now += Math.max(1000 / target.fps, duration);
-            adaptation.observe(duration, target.fps, now);
-            samples++;
-            bytes += size;
-        }
-        return { samples, bytes, target: adaptation.settings(base) };
-    };
-    const fast = simulate(10, 100000, 5);
-    assert.equal(fast.target.quality, 60);
-    const slow = simulate(20, 500, 80);
-    assert.ok(slow.target.fps < 8);
-    assert.ok(slow.target.quality < 30);
-    assert.ok(slow.bytes / 20 < fast.bytes / 10 / 3);
-    const level = adaptation.level;
-    simulate(1, 100000, 5);
-    assert.equal(adaptation.level, level);
-    const recovered = simulate(70, 100000, 5);
-    assert.equal(recovered.target.quality, 60);
-    assert.equal(recovered.target.fps, 23);
-});
+function part(sequence = 1, data = new Uint8Array([255, 216, sequence, 255, 217])) {
+    const headers = new TextEncoder().encode(
+        `--frame\r\nContent-Type: image/jpeg\r\nContent-Length: ${data.length}\r\n` +
+        `X-Frame-Sequence: ${sequence}\r\nX-Frame-Time: ${performance.now() / 1000}\r\n` +
+        'X-Webcam-Quality: 30\r\nX-Webcam-Fps: 23\r\nX-Stream-Fps: 23\r\n' +
+        'X-Capture-Fps: 23\r\nX-Webcam-Auto: 1\r\nX-Webcam-Network: 1\r\n\r\n');
+    return Buffer.concat([headers, data, Buffer.from('\r\n')]);
+}
 
-test('one slow frame does not oscillate quality; viewers and manual settings are independent', () => {
-    const slow = new WebcamAdaptation();
-    const fast = new WebcamAdaptation();
-    slow.observe(500, 23, 500);
-    assert.equal(slow.level, 0);
-    slow.observe(500, 23, 1000);
-    assert.equal(slow.level, 1);
-    assert.equal(fast.level, 0);
-    for (let i = 0; i < 100; i++) slow.degrade();
-    assert.equal(slow.level, 10);
-    assert.equal(slow.settings(base).fps, 1);
-    assert.equal(slow.settings(base).quality, 10);
-    assert.equal(slow.settings({ ...base, quality: 5 }).quality, 5);
-    assert.deepEqual(slow.settings({ ...base, auto_adjust: false, network_adaptation: false }), { quality: 60, fps: 23 });
-});
-
-function setup(t, options = {}) {
+function setup(t, options = {}, fastTimers = true) {
     const liveUrls = new Set();
     let urlId = 0;
     const image = { src: '', removeAttribute() { this.src = ''; }, async decode() {} };
@@ -66,7 +28,9 @@ function setup(t, options = {}) {
     const timers = new Set();
     const realClear = clearTimeout;
     t.mock.method(global, 'setTimeout', (callback, delay) => {
-        const timer = realTimeout(() => { timers.delete(timer); callback(); }, delay === 5000 ? 30 : 1);
+        if (!fastTimers && ![5000, 1500, 1000].includes(delay)) return realTimeout(callback, delay);
+        const timer = realTimeout(() => { timers.delete(timer); callback(); },
+            fastTimers ? (delay === 5000 ? 50 : 1) : delay);
         timers.add(timer);
         return timer;
     });
@@ -76,125 +40,217 @@ function setup(t, options = {}) {
     return { player, image, liveUrls, timers };
 }
 
-function settingsResponse(settings = base) {
-    return Response.json({ status: 'success', data: { quality: settings } });
-}
-
-function snapshotResponse(sequence = 1, status = 200) {
-    return new Response(status === 204 ? null : new Uint8Array([255, 216, 255, 217]), {
-        status,
-        headers: {
-            'Content-Type': 'image/jpeg', 'X-Frame-Sequence': String(sequence),
-            'X-Webcam-Quality': '60', 'X-Webcam-Fps': '23', 'X-Webcam-Auto': '1', 'X-Webcam-Network': '1',
+function videoResponse(signal, chunks = []) {
+    return new Response(new ReadableStream({
+        start(controller) {
+            chunks.forEach(chunk => controller.enqueue(chunk));
+            signal.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')),
+                { once: true });
         },
-    });
+    }), { headers: { 'X-Stream-Id': 'session-id' } });
 }
 
-test('watchdog AbortError reconnects, and stop releases URLs and timers', async t => {
+test('multipart parser handles every chunk boundary and binary JPEG marker sequences', () => {
+    const jpeg = new Uint8Array([255, 216, 1, 255, 217, 2, 255, 216, 3, 255, 217]);
+    const bytes = Buffer.concat([part(1, jpeg), part(2, jpeg)]);
+    const parser = new WebcamMultipartParser();
+    const frames = [];
+    for (const byte of bytes) {
+        const result = parser.push(new Uint8Array([byte]));
+        if (result.latest) frames.push(result.latest);
+    }
+    assert.equal(frames.length, 2);
+    assert.deepEqual(frames[0].data, jpeg);
+    assert.equal(frames[1].headers['x-frame-sequence'], '2');
+    const grouped = new WebcamMultipartParser().push(bytes);
+    assert.equal(grouped.count, 2);
+    assert.equal(grouped.latest.headers['x-frame-sequence'], '2');
+});
+
+test('parser rejects invalid lengths and bounds its buffer', () => {
+    const parser = new WebcamMultipartParser();
+    assert.throws(() => parser.push(new TextEncoder().encode('--frame\r\nContent-Length: 5000000\r\n\r\n')));
+    assert.throws(() => new WebcamMultipartParser().push(new Uint8Array(5_000_001)));
+});
+
+test('constant network latency does not reduce FPS; each viewer adapts independently', () => {
+    const fast = new WebcamAdaptation();
+    const slow = new WebcamAdaptation();
+    for (let now = 500; now < 10000; now += 500) {
+        fast.observe({ fps: 23, lagMs: 0, decodeMs: 2 }, 23, now);
+    }
+    assert.deepEqual(fast.settings(base), { quality: 30, fps: 23 });
+    slow.observe({ fps: 8, lagMs: 250, decodeMs: 2 }, 23, 500);
+    slow.observe({ fps: 8, lagMs: 400, decodeMs: 2 }, 23, 1000);
+    assert.equal(slow.level, 1);
+    assert.equal(slow.settings(base).fps, 23);
+    assert.ok(slow.settings(base).quality < 30);
+    assert.equal(fast.level, 0);
+    assert.deepEqual(slow.settings({ ...base, auto_adjust: false, network_adaptation: false }), { quality: 30, fps: 23 });
+});
+
+test('continuous bandwidth model adapts to 500 kbit/s and recovers with delayed feedback', () => {
+    const adaptation = new WebcamAdaptation();
+    let applied = adaptation.settings(base);
+    let queue = [];
+    let feedback = [];
+    let nextSend = 0;
+    let networkFree = 0;
+    let minOffset = Infinity;
+    let sampleStart = 0;
+    let received = 0;
+    let lag = 0;
+    let atSlow;
+    for (let now = 0; now < 100000; now++) {
+        const bandwidth = now >= 5000 && now < 25000 ? 500 : 100000;
+        while (feedback.length && feedback[0].at <= now) applied = feedback.shift().settings;
+        if (now >= nextSend && queue.reduce((sum, frame) => sum + frame.size, 0) < 65536) {
+            const size = 1000 + applied.quality * 400;
+            networkFree = Math.max(now, networkFree) + size * 8 / bandwidth;
+            queue.push({ sent: now, arrival: networkFree + 80, size });
+            nextSend = now + 1000 / applied.fps;
+        }
+        while (queue.length && queue[0].arrival <= now) {
+            const frame = queue.shift();
+            const offset = now - frame.sent;
+            minOffset = Math.min(minOffset, offset);
+            lag = offset - minOffset;
+            received++;
+        }
+        if (now - sampleStart >= 500) {
+            adaptation.observe({ fps: received * 1000 / (now - sampleStart), lagMs: lag, decodeMs: 2 }, applied.fps, now);
+            feedback.push({ at: now + 200, settings: adaptation.settings(base) });
+            sampleStart = now;
+            received = 0;
+        }
+        if (now === 24000) atSlow = { ...applied };
+    }
+    assert.ok(atSlow.quality < base.quality);
+    assert.ok(atSlow.fps >= 5);
+    assert.ok((1000 + atSlow.quality * 400) * atSlow.fps * 8 < 600000);
+    assert.deepEqual(applied, { quality: 30, fps: 23 });
+});
+
+test('watchdog reconnects a stalled MJPEG stream and releases resources on stop', async t => {
     const states = [];
-    const { player, image, liveUrls, timers } = setup(t, {
+    const { player, liveUrls, timers } = setup(t, {
         onState(state) { states.push(state); if (state === 'playing') player.stop(); },
     });
     let requests = 0;
     t.mock.method(global, 'fetch', async (url, options) => {
-        assert.equal(options.cache, 'no-store');
-        if (url === '/api/webcam/quality') return settingsResponse();
-        requests++;
-        if (requests === 1) {
-            return new Promise((resolve, reject) => {
-                options.signal.addEventListener('abort', () => reject(new DOMException('Timeout', 'AbortError')));
-            });
-        }
-        return snapshotResponse();
+        assert.ok(url.startsWith('/api/webcam/stream?'));
+        return videoResponse(options.signal, ++requests === 1 ? [] : [part()]);
     });
     await player.start();
     assert.equal(requests, 2);
     assert.ok(states.includes('retrying'));
-    assert.ok(states.includes('playing'));
-    assert.equal(image.src, '');
     assert.equal(liveUrls.size, 0);
     assert.equal(timers.size, 0);
 });
 
-test('snapshots use sequence IDs, do not overlap, and keep the configured quality ceiling', async t => {
-    let displayed = 0;
-    const { player, liveUrls, timers } = setup(t, {
-        onState(state) { if (state === 'playing' && ++displayed === 3) player.stop(); },
-    });
-    player.adaptation.level = 2;
-    const qualities = [];
-    let inFlight = 0;
+test('EOF reconnects in automatic mode without requesting snapshots', async t => {
+    const { player } = setup(t, { onState(state) { if (state === 'playing') player.stop(); } });
     let requests = 0;
     t.mock.method(global, 'fetch', async (url, options) => {
-        if (url === '/api/webcam/quality') return settingsResponse();
-        assert.equal(++inFlight, 1);
-        const params = new URL(url, 'http://local').searchParams;
-        qualities.push(Number(params.get('quality')));
-        if (requests > 0) assert.equal(params.get('after'), String(requests));
-        await Promise.resolve();
-        inFlight--;
-        return snapshotResponse(++requests);
+        assert.ok(url.startsWith('/api/webcam/stream?'));
+        if (++requests === 1) return new Response(new ReadableStream({ start(controller) { controller.close(); } }));
+        return videoResponse(options.signal, [part()]);
     });
     await player.start();
-    assert.deepEqual(qualities, [31, 31, 31]);
-    assert.equal(liveUrls.size, 0);
-    assert.equal(timers.size, 0);
-});
-
-test('unchanged frames neither improve adaptation nor reset the freshness watchdog', async t => {
-    const { player } = setup(t);
-    const controller = new AbortController();
-    let requests = 0;
-    let observations = 0;
-    let touches = 0;
-    player.adaptation.observe = () => observations++;
-    t.mock.method(global, 'fetch', async () => {
-        if (++requests === 2) controller.abort();
-        return snapshotResponse(1, 204);
-    });
-    await player.snapshots(base, controller.signal, player.generation, () => touches++);
     assert.equal(requests, 2);
-    assert.equal(observations, 0);
-    assert.equal(touches, 0);
 });
 
-test('manual mode uses MJPEG, retries EOF, and displays the latest complete JPEG', async t => {
-    const { player, liveUrls, timers } = setup(t, {
-        onState(state) { if (state === 'playing') player.stop(); },
-    });
-    let requests = 0;
-    t.mock.method(global, 'fetch', async url => {
-        if (url === '/api/webcam/quality') {
-            return settingsResponse({ ...base, auto_adjust: false, network_adaptation: false });
-        }
-        assert.ok(url.startsWith('/api/webcam/stream?'));
-        requests++;
-        return new Response(new ReadableStream({
-            start(controller) {
-                if (requests > 1) controller.enqueue(new Uint8Array([255, 216, 1, 255, 217, 255, 216, 2, 255, 217]));
-                controller.close();
-            },
-        }));
-    });
+test('slow image decoding does not block network reads and retains only the latest frame', async t => {
+    const { player, image, liveUrls, timers } = setup(t);
+    let finishDecode;
+    let decodes = 0;
+    let source;
+    const displayed = [];
+    image.decode = () => ++decodes === 1 ? new Promise(resolve => { finishDecode = resolve; }) : Promise.resolve();
     const show = player.show.bind(player);
     player.show = async (blob, ...args) => {
-        assert.deepEqual([...new Uint8Array(await blob.arrayBuffer())], [255, 216, 2, 255, 217]);
+        displayed.push(new Uint8Array(await blob.arrayBuffer())[2]);
         await show(blob, ...args);
+        if (displayed.length === 2) player.stop();
     };
-    await player.start();
-    assert.equal(requests, 2);
+    t.mock.method(global, 'fetch', async (url, options) => new Response(new ReadableStream({
+        start(controller) {
+            source = controller;
+            controller.enqueue(part(1));
+            options.signal.addEventListener('abort', () => controller.error(new DOMException('Aborted', 'AbortError')));
+        },
+    })));
+    const running = player.start();
+    while (!finishDecode) await new Promise(setImmediate);
+    source.enqueue(Buffer.concat(Array.from({ length: 19 }, (_, i) => part(i + 2))));
+    await new Promise(setImmediate);
+    finishDecode();
+    await running;
+    assert.deepEqual(displayed, [1, 20]);
     assert.equal(liveUrls.size, 0);
     assert.equal(timers.size, 0);
 });
 
-test('stop while an image decode is pending cancels the player without reconnecting', async t => {
+test('23 FPS continuous HTTP stream survives 200 ms startup latency and 600 ms feedback delay', { timeout: 10000 }, async t => {
+    const originalFetch = fetch;
+    let streamRequests = 0;
+    let feedbackRequests = 0;
+    let framesDuringFeedback = 0;
+    let feedbackPending = false;
+    const server = http.createServer((req, res) => {
+        if (req.method === 'POST') {
+            feedbackRequests++;
+            feedbackPending = true;
+            req.resume();
+            const timer = setTimeout(() => { feedbackPending = false; res.writeHead(204).end(); }, 600);
+            res.on('close', () => clearTimeout(timer));
+            return;
+        }
+        assert.ok(req.url.startsWith('/api/webcam/stream?'));
+        streamRequests++;
+        let sequence = 0;
+        let interval;
+        const timer = setTimeout(() => {
+            res.writeHead(200, { 'Content-Type': 'multipart/x-mixed-replace; boundary=frame', 'X-Stream-Id': 'live' });
+            res.flushHeaders();
+            interval = setInterval(() => res.write(part(++sequence)), 1000 / 23);
+        }, 200);
+        res.on('close', () => { clearTimeout(timer); clearInterval(interval); });
+    });
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    t.after(() => { server.closeAllConnections(); server.close(); });
+    let first;
+    let last;
+    let displayed = 0;
+    const { player, liveUrls, timers } = setup(t, {
+        onState(state) {
+            if (state !== 'playing') return;
+            first ??= performance.now();
+            last = performance.now();
+            if (feedbackPending) framesDuringFeedback++;
+            if (++displayed === 30) player.stop();
+        },
+    }, false);
+    t.mock.method(global, 'fetch', (url, options) => originalFetch(`http://127.0.0.1:${server.address().port}${url}`, options));
+    await player.start();
+    const fps = (displayed - 1) * 1000 / (last - first);
+    assert.ok(fps > 18, `measured FPS: ${fps}`);
+    assert.equal(streamRequests, 1);
+    assert.ok(feedbackRequests >= 1);
+    assert.ok(framesDuringFeedback >= 8);
+    assert.equal(player.adaptation.level, 0);
+    assert.equal(liveUrls.size, 0);
+    assert.equal(timers.size, 0);
+    t.diagnostic(`measured ${fps.toFixed(1)} FPS; ${framesDuringFeedback} frames while feedback was delayed`);
+});
+
+test('stop during image decode cancels the stream without reconnecting', async t => {
     const { player, image, liveUrls, timers } = setup(t);
     image.decode = () => { player.stop(); return new Promise(() => {}); };
     let requests = 0;
-    t.mock.method(global, 'fetch', async url => {
-        if (url === '/api/webcam/quality') return settingsResponse();
+    t.mock.method(global, 'fetch', async (url, options) => {
         requests++;
-        return snapshotResponse();
+        return videoResponse(options.signal, [part()]);
     });
     await player.start();
     assert.equal(requests, 1);
@@ -202,7 +258,7 @@ test('stop while an image decode is pending cancels the player without reconnect
     assert.equal(timers.size, 0);
 });
 
-test('every camera page loads the common player before its own script', () => {
+test('every camera page uses the common continuous player', () => {
     const fs = require('node:fs');
     const path = require('node:path');
     for (const [template, script] of [['control', 'control'], ['operator', 'operator'], ['admin_panel', 'admin']]) {

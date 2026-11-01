@@ -41,3 +41,8 @@ class WebcamQualityRequest(BaseModel):
     fps: Optional[int] = Field(None, ge=1, le=60, description="Новая целевая частота кадров (1-60)")
     auto_adjust: Optional[bool] = Field(None, description="Включить или выключить автоматическую настройку качества")
     network_adaptation: Optional[bool] = Field(None, description="Включить или выключить адаптацию к сети")
+
+
+class WebcamStreamFeedback(BaseModel):
+    quality: int = Field(..., ge=1, le=95)
+    fps: float = Field(..., ge=1, le=60, allow_inf_nan=False)
