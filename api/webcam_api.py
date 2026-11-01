@@ -19,28 +19,28 @@ stream_sessions = {}
 current_frame = None
 current_frame_bytes = None
 frame_sequence = 0
-frame_quality = 30
+frame_quality = 20
 last_frame_time = 0
 frame_lock = threading.Lock()
 capture_thread = None
 stop_capture = False
 
 video_quality = {
-    "quality": 30,
-    "width": 640,
-    "height": 480,
-    "fps": 23,
-    "auto_adjust": True,
+    "quality": 20,
+    "width": 320,
+    "height": 240,
+    "fps": 15,
+    "auto_adjust": False,
     "min_quality": 1,
     "max_quality": 95,
-    "network_adaptation": True
+    "network_adaptation": False
 }
 
 frame_stats = {
     "capture_times": [],
     "encode_times": [],
     "stream_intervals": [],
-    "target_fps": 23,
+    "target_fps": 15,
     "last_adjustment": 0,
     "adjustment_interval": 2.0
 }
